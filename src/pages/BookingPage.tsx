@@ -52,11 +52,12 @@ export const BookingPage: React.FC = () => {
     setOccupiedIntervals(intervals);
   }, [bookingRules]);
 
+  // 優化重置邏輯
   const handleReset = async () => {
     setSuccessId(null);
     setBookingTime('');
     setFormData({});
-    // 強制重新獲取資料，確保時段選單是最新的
+    // 強制再次查詢資料庫，確保獲取最新佔用狀態
     await fetchOccupied(bookingDate);
   };
 
@@ -138,8 +139,13 @@ export const BookingPage: React.FC = () => {
           customer_id: customer.id, booking_date: bookingDate, booking_time: bookingTime, booking_data: formData, status: 'pending'
       }]).select().single();
       if (aptError) throw aptError;
+      
+      // 觸發通知
       await sendNotification(aptData.id, 'new');
+      
+      // 成功後立即刷新本地佔用狀態
       await fetchOccupied(bookingDate); 
+      
       setSuccessId(aptData.id);
     } catch (err: any) { alert('預約失敗：' + err.message); }
     finally { setSubmitting(false); }
@@ -156,8 +162,8 @@ export const BookingPage: React.FC = () => {
         <h2 className="text-3xl font-bold text-slate-800 mb-3">預約已提交！</h2>
         <p className="text-slate-600 mb-8 text-lg">感謝您的預約，<span className="font-semibold">{customer?.full_name}</span>。</p>
         <div className="space-y-4">
-          <button onClick={handleReset} className="w-full btn-primary py-4 text-lg">再次預約</button>
-          <button onClick={() => navigate('/my-appointments')} className="w-full py-3 text-slate-500 font-medium hover:bg-slate-50 rounded-lg border">查看我的預約紀錄</button>
+          <button onClick={handleReset} className="w-full btn-primary py-4 text-lg font-bold shadow-lg shadow-blue-200">再次預約</button>
+          <button onClick={() => navigate('/my-appointments')} className="w-full py-3 text-slate-500 font-medium hover:bg-slate-50 rounded-lg border">查看預約紀錄</button>
         </div>
       </div>
     );
