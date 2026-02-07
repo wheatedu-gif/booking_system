@@ -60,8 +60,8 @@ export const AdminDashboard: React.FC = () => {
           <SidebarButton active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} icon={<Users size={20}/>} label="客戶管理" />
           <SidebarButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={20}/>} label="系統設定" />
         </div>
-        <div className="flex-1 bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden min-h-[700px]">
-          {loading && activeTab !== 'cms' ? (
+        <div className="flex-1 bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden min-h-[700px]">
+          {loading && activeTab !== 'cms' && activeTab !== 'availability' ? (
             <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>
           ) : activeTab === 'cms' ? <WebsiteEditor /> : (
             <div className="p-8">
@@ -94,7 +94,7 @@ const DashboardHome: React.FC<{ appointments: Appointment[] }> = ({ appointments
     };
     return (
         <div className="space-y-10 animate-in fade-in duration-500">
-            <h2 className="text-3xl font-black text-slate-800 tracking-tight text-center lg:text-left">營運儀表板</h2>
+            <h2 className="text-3xl font-black text-slate-800 tracking-tight">營運儀表板</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard icon={<CalendarIcon />} title="今日預約" value={stats.today} color="blue" />
                 <StatCard icon={<AlertCircle />} title="待處理" value={stats.pending} color="amber" />
@@ -102,13 +102,13 @@ const DashboardHome: React.FC<{ appointments: Appointment[] }> = ({ appointments
                 <StatCard icon={<Users />} title="本月新客" value={stats.newMonth} color="purple" />
             </div>
             <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100">
-                <h3 className="text-xl font-bold text-slate-800 mb-6">近期動態</h3>
+                <h3 className="text-xl font-bold text-slate-800 mb-6">近期預約動態</h3>
                 <div className="space-y-3">
                     {appointments.slice(0, 5).map(apt => (
-                        <div key={apt.id} className="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-white">
+                        <div key={apt.id} className="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-white hover:border-blue-100 transition-all">
                             <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center font-bold">{(apt as any).customers?.full_name?.[0]}</div>
-                                <div><div className="font-bold text-slate-800">{(apt as any).customers?.full_name}</div><div className="text-xs text-slate-400">{apt.booking_date}</div></div>
+                                <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-bold">{(apt as any).customers?.full_name?.[0]}</div>
+                                <div><div className="font-bold text-slate-800">{(apt as any).customers?.full_name}</div><div className="text-xs text-slate-400">{apt.booking_date} {apt.booking_time.slice(0,5)}</div></div>
                             </div>
                             <span className="text-[10px] font-black uppercase px-3 py-1 rounded-full bg-slate-100 text-slate-500">{apt.status}</span>
                         </div>
@@ -119,15 +119,18 @@ const DashboardHome: React.FC<{ appointments: Appointment[] }> = ({ appointments
     );
 };
 
-const StatCard: React.FC<{ icon: React.ReactNode, title: string, value: number, color: string }> = ({ icon, title, value, color }) => (
-    <div className="bg-white p-8 rounded-[2rem] border border-slate-50 shadow-sm">
-        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 bg-${color}-50 text-${color}-600`}>{icon}</div>
-        <div className="text-slate-400 text-xs font-bold uppercase tracking-widest">{title}</div>
-        <div className="text-4xl font-black text-slate-800 mt-1">{value}</div>
-    </div>
-);
+const StatCard: React.FC<{ icon: React.ReactNode, title: string, value: number, color: string }> = ({ icon, title, value, color }) => {
+    const bgColors: any = { blue: 'bg-blue-50', amber: 'bg-amber-50', green: 'bg-green-50', purple: 'bg-purple-50' };
+    const textColors: any = { blue: 'text-blue-600', amber: 'text-amber-600', green: 'text-green-600', purple: 'text-purple-600' };
+    return (
+        <div className="bg-white p-8 rounded-[2rem] border border-slate-50 shadow-sm">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${bgColors[color]} ${textColors[color]}`}>{icon}</div>
+            <div className="text-slate-400 text-xs font-bold uppercase tracking-widest">{title}</div>
+            <div className="text-4xl font-black text-slate-800 mt-1">{value}</div>
+        </div>
+    );
+};
 
-// --- 預約管理 ---
 const AppointmentManager: React.FC<{ appointments: Appointment[], onStatusChange: (id: string, s: string, reason?: string) => void }> = ({ appointments, onStatusChange }) => {
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [searchTerm, setSearchTerm] = useState('');
@@ -141,7 +144,7 @@ const AppointmentManager: React.FC<{ appointments: Appointment[], onStatusChange
       </div>
       {viewMode === 'calendar' ? <AppointmentCalendar appointments={filteredApts} onStatusChange={onStatusChange} onSelect={setSelectedApt} /> : (
         <div className="overflow-hidden border border-slate-100 rounded-3xl"><table className="w-full text-left border-collapse"><thead className="bg-slate-50/50"><tr><th className="py-5 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest">時間</th><th className="py-5 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest">客戶</th><th className="py-5 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest">狀態</th><th className="py-5 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">動作</th></tr></thead><tbody className="divide-y divide-slate-50">{filteredApts.map(apt => (
-                <tr key={apt.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => setSelectedApt(apt)}><td className="py-5 px-6"><div className="font-bold text-slate-700">{apt.booking_date}</div><div className="text-blue-500 text-xs font-medium">{apt.booking_time.slice(0,5)}</div></td><td className="py-5 px-6"><div className="font-bold text-slate-700 group-hover:text-blue-600 transition-colors flex items-center gap-2">{(apt as any).customers?.full_name} <ExternalLink size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" /></div><div className="text-slate-400 text-xs">{(apt as any).customers?.email}</div></td><td className="py-5 px-6"><span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${apt.status === 'confirmed' ? 'bg-green-100 text-green-700' : apt.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{apt.status === 'confirmed' ? '已確認' : apt.status === 'cancelled' ? '已取消' : '待處理'}</span></td><td className="py-5 px-6 text-right" onClick={e => e.stopPropagation()}><div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">{apt.status === 'pending' && <button onClick={() => onStatusChange(apt.id, 'confirmed')} className="bg-green-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-sm shadow-green-100 hover:bg-green-600 transition-all">確認</button>}{apt.status !== 'cancelled' && <button onClick={() => { const r = window.prompt('原因'); if(r !== null) onStatusChange(apt.id, 'cancelled', r); }} className="text-slate-400 hover:text-red-500 font-bold text-xs">取消</button>}</div></td></tr>))}</tbody></table></div>
+                <tr key={apt.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => setSelectedApt(apt)}><td className="py-5 px-6"><div className="font-bold text-slate-700">{apt.booking_date}</div><div className="text-blue-500 text-xs font-medium">{apt.booking_time.slice(0,5)}</div></td><td className="py-5 px-6"><div className="font-bold text-slate-700 group-hover:text-blue-600 transition-colors flex items-center gap-2">{(apt as any).customers?.full_name} <ExternalLink size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" /></div><div className="text-slate-400 text-xs">{(apt as any).customers?.email}</div></td><td className="py-5 px-6"><span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${apt.status === 'confirmed' ? 'bg-green-100 text-green-800' : apt.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{apt.status === 'confirmed' ? '已確認' : apt.status === 'cancelled' ? '已取消' : '待處理'}</span></td><td className="py-5 px-6 text-right" onClick={e => e.stopPropagation()}><div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">{apt.status === 'pending' && <button onClick={() => onStatusChange(apt.id, 'confirmed')} className="bg-green-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-sm shadow-green-100 hover:bg-green-600 transition-all">確認</button>}{apt.status !== 'cancelled' && <button onClick={() => { const r = window.prompt('原因'); if(r !== null) onStatusChange(apt.id, 'cancelled', r); }} className="text-slate-400 hover:text-red-500 font-bold text-xs">取消</button>}</div></td></tr>))}</tbody></table></div>
       )}
       {selectedApt && <AppointmentDetailModal apt={selectedApt} onClose={() => setSelectedApt(null)} onStatusChange={onStatusChange} />}
     </div>
@@ -151,7 +154,7 @@ const AppointmentManager: React.FC<{ appointments: Appointment[], onStatusChange
 const AppointmentDetailModal: React.FC<{ apt: Appointment, onClose: () => void, onStatusChange: (id: string, s: string, r?: string) => void }> = ({ apt, onClose, onStatusChange }) => {
     const customer = (apt as any).customers;
     return (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={onClose}><div className="bg-white rounded-[3rem] w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}><div className="bg-slate-900 p-10 text-white flex justify-between items-start"><div><div className="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em] mb-2">預約詳情</div><h3 className="text-3xl font-black">{customer?.full_name}</h3><p className="text-slate-400 mt-1">{customer?.email}</p></div><button onClick={onClose} className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all"><X /></button></div><div className="p-10 grid grid-cols-1 md:grid-cols-2 gap-10"><section className="space-y-6"><div className="flex gap-4 items-start"><Clock className="text-blue-600 mt-1"/><div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">預約時間</div><div className="text-lg font-bold">{apt.booking_date} {apt.booking_time.slice(0,5)}</div></div><div className="flex gap-4 items-start"><AlertCircle className="text-blue-600 mt-1"/><div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">當前狀態</div><div className="text-lg font-bold uppercase">{apt.status}</div></div></section><section className="bg-slate-50 rounded-3xl p-6"><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">客戶填寫內容</h4><div className="space-y-3">{Object.entries(apt.booking_data || {}).map(([k, v]) => (<div key={k} className="flex justify-between text-sm border-b border-slate-200/50 pb-2"><span className="text-slate-500">{k}</span><span className="font-bold text-slate-800">{String(v)}</span></div>))}</div></section></div><div className="bg-slate-50 p-8 flex justify-end gap-4">{apt.status === 'pending' && <button onClick={() => { onStatusChange(apt.id, 'confirmed'); onClose(); }} className="bg-green-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg hover:bg-green-700 transition-all">確認預約</button>}{apt.status !== 'cancelled' && <button onClick={() => { const r = window.prompt('原因'); if(r!==null) { onStatusChange(apt.id, 'cancelled', r); onClose(); } }} className="bg-white text-red-500 border border-red-100 px-8 py-3 rounded-2xl font-black transition-all">取消預約</button>}<button onClick={onClose} className="text-slate-400 font-bold px-4 hover:text-slate-600">關閉</button></div></div></div>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={onClose}><div className="bg-white rounded-[3rem] w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}><div className="bg-slate-900 p-10 text-white flex justify-between items-start"><div><div className="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em] mb-2">預約詳情</div><h3 className="text-3xl font-black">{customer?.full_name}</h3><p className="text-slate-400 mt-1">{customer?.email}</p></div><button onClick={onClose} className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all"><X /></button></div><div className="p-10 grid grid-cols-1 md:grid-cols-2 gap-10"><section className="space-y-6"><div className="flex gap-4 items-start"><Clock className="text-blue-600 mt-1"/><div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">預約時間</div><div className="text-lg font-bold">{apt.booking_date} {apt.booking_time.slice(0,5)}</div></div><div className="flex gap-4 items-start"><AlertCircle className="text-blue-600 mt-1"/><div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">當前狀態</div><div className="text-lg font-bold uppercase">{apt.status}</div></div></section><section className="bg-slate-50 rounded-3xl p-6"><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">客戶填寫內容</h4><div className="space-y-3">{Object.entries(apt.booking_data || {}).map(([k, v]) => (<div key={k} className="flex justify-between text-sm border-b border-slate-200/50 pb-2"><span className="text-slate-500">{k}</span><span className="font-bold text-slate-800">{String(v)}</span></div>))}</div></section></div><div className="bg-slate-50 p-8 flex justify-end gap-4">{apt.status === 'pending' && <button onClick={() => { onStatusChange(apt.id, 'confirmed'); onClose(); }} className="bg-green-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-green-200 hover:bg-green-700 transition-all">確認預約</button>}{apt.status !== 'cancelled' && <button onClick={() => { const r = window.prompt('原因'); if(r!==null) { onStatusChange(apt.id, 'cancelled', r); onClose(); } }} className="bg-white text-red-500 border border-red-100 px-8 py-3 rounded-2xl font-black transition-all">取消預約</button>}<button onClick={onClose} className="text-slate-400 font-bold px-4 hover:text-slate-600">關閉</button></div></div></div>
     );
 };
 
@@ -161,7 +164,7 @@ const AppointmentCalendar: React.FC<{ appointments: Appointment[], onStatusChang
   const calendarDays = eachDayOfInterval({ start: startOfWeek(monthStart), end: endOfWeek(endOfMonth(monthStart)) });
   const getDayAppointments = (day: Date) => appointments.filter(apt => isSameDay(parseISO(apt.booking_date), day) && apt.status !== 'cancelled');
   return (
-    <div className="bg-white"><div className="flex items-center justify-between mb-8"><h3 className="text-2xl font-black text-slate-800">{format(currentDate, 'yyyy 年 M 月', { locale: zhTW })}</h3><div className="flex gap-2 bg-slate-50 p-1.5 rounded-2xl border"><button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition-all"><ChevronLeft size={20}/></button><button onClick={() => setCurrentDate(new Date())} className="px-5 py-1 text-sm font-bold text-blue-600">今天</button><button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition-all"><ChevronRight size={20}/></button></div></div><div className="grid grid-cols-7 gap-px bg-slate-100 border border-slate-100 rounded-[2.5rem] overflow-hidden shadow-sm">{calendarDays.map((day, idx) => (<div key={idx} className={`min-h-[140px] p-3 bg-white ${isSameMonth(day, monthStart) ? '' : 'bg-slate-50/50 opacity-40'}`}><div className={`text-right text-xs font-bold mb-3 ${isSameDay(day, new Date()) ? 'text-blue-600' : 'text-slate-300'}`}>{format(day, 'd')}</div><div className="space-y-1.5">{getDayAppointments(day).map(apt => <div key={apt.id} className={`text-[10px] p-2 rounded-xl border-l-4 shadow-sm truncate font-bold cursor-pointer hover:scale-105 transition-transform ${apt.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-500' : 'bg-blue-50 text-blue-700 border-blue-500'}`} onClick={() => onSelect(apt)}>{apt.booking_time.slice(0,5)} {(apt as any).customers?.full_name}</div>)}</div></div>))}</div></div>
+    <div className="bg-white animate-in fade-in duration-500"><div className="flex items-center justify-between mb-8"><h3 className="text-2xl font-black text-slate-800">{format(currentDate, 'yyyy 年 M 月', { locale: zhTW })}</h3><div className="flex gap-2 bg-slate-50 p-1.5 rounded-2xl border"><button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition-all"><ChevronLeft size={20}/></button><button onClick={() => setCurrentDate(new Date())} className="px-5 py-1 text-sm font-bold text-blue-600">今天</button><button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition-all"><ChevronRight size={20}/></button></div></div><div className="grid grid-cols-7 mb-4 text-center text-[10px] font-black text-slate-400 tracking-[0.2em] uppercase">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => <div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-px bg-slate-100 border border-slate-100 rounded-[2.5rem] overflow-hidden shadow-sm">{calendarDays.map((day, idx) => (<div key={idx} className={`min-h-[140px] p-3 bg-white ${isSameMonth(day, monthStart) ? '' : 'bg-slate-50/50 opacity-40'}`}><div className={`text-right text-xs font-bold mb-3 ${isSameDay(day, new Date()) ? 'text-blue-600' : 'text-slate-300'}`}>{format(day, 'd')}</div><div className="space-y-1.5">{getDayAppointments(day).map(apt => <div key={apt.id} className={`text-[10px] p-2 rounded-xl border-l-4 shadow-sm truncate font-bold cursor-pointer hover:scale-105 transition-transform ${apt.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-500' : 'bg-blue-50 text-blue-700 border-blue-500'}`} onClick={() => onSelect(apt)}>{apt.booking_time.slice(0,5)} {(apt as any).customers?.full_name}</div>)}</div></div>))}</div></div>
   );
 };
 
@@ -184,7 +187,6 @@ const SettingsManager: React.FC = () => {
   const [templates, setTemplates] = useState({ new_booking: { subject: '', body: '' }, confirmed: { subject: '', body: '' }, cancelled: { subject: '', body: '' } });
   const [testing, setTesting] = useState(false);
   const { showToast } = useToast();
-
   useEffect(() => {
     supabase.from('system_settings').select('*').in('key', ['email_config', 'email_templates']).then(({ data }) => {
         data?.forEach(d => {
@@ -193,15 +195,7 @@ const SettingsManager: React.FC = () => {
         });
     });
   }, []);
-
-  const saveSettings = async () => {
-    await supabase.from('system_settings').upsert([
-        { key: 'email_config', value: config },
-        { key: 'email_templates', value: templates }
-    ]);
-    showToast('系統設定已儲存');
-  };
-
+  const saveSettings = async () => { await supabase.from('system_settings').upsert([{ key: 'email_config', value: config }, { key: 'email_templates', value: templates }]); showToast('系統設定已儲存'); };
   const handleTestEmail = async () => {
     if (!config.user || !config.pass) { showToast('請填寫帳密', 'error'); return; }
     setTesting(true);
@@ -212,50 +206,23 @@ const SettingsManager: React.FC = () => {
         showToast('測試郵件已送出！');
     } catch (err: any) { showToast('發送失敗：' + err.message, 'error'); } finally { setTesting(false); }
   };
-
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3"><Settings className="text-blue-600" /> 通知系統設定</h2>
-        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-            <button onClick={() => setActiveSubSubTab('smtp')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeSubTab === 'smtp' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>SMTP 帳號</button>
-            <button onClick={() => setActiveSubSubTab('templates')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeSubTab === 'templates' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>郵件範本</button>
-        </div>
-      </div>
-
+      <div className="flex justify-between items-center"><h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3"><Settings className="text-blue-600" /> 通知系統設定</h2><div className="flex bg-slate-100 p-1.5 rounded-xl border border-slate-200"><button onClick={() => setActiveSubSubTab('smtp')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeSubTab === 'smtp' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>SMTP 帳號</button><button onClick={() => setActiveSubSubTab('templates')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeSubTab === 'templates' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>郵件範本</button></div></div>
       <div className="bg-slate-50 p-10 rounded-[2.5rem] border border-slate-100 shadow-sm max-w-2xl">
         {activeSubTab === 'smtp' ? (
-            <div className="space-y-6">
-                <label className="flex items-center gap-5 p-5 bg-white rounded-3xl cursor-pointer border border-slate-100 hover:border-blue-200 transition-all shadow-sm">
-                    <input type="checkbox" className="w-6 h-6 text-blue-600 rounded-xl" checked={config.enabled} onChange={e => setConfig({...config, enabled: e.target.checked})} />
-                    <div className="flex-1"><div className="font-bold text-slate-700">啟用 Email 自動通知</div></div>
-                </label>
-                <div><label className="text-[10px] font-black text-slate-400 uppercase mb-3 block ml-1">寄件者名稱</label><input className="input-field bg-white" value={config.from_name} onChange={e => setConfig({...config, from_name: e.target.value})} /></div>
-                <div><label className="text-[10px] font-black text-slate-400 uppercase mb-3 block ml-1">Gmail 帳號</label><input className="input-field bg-white" value={config.user} onChange={e => setConfig({...config, user: e.target.value})} /></div>
-                <div><label className="text-[10px] font-black text-slate-400 uppercase mb-3 block ml-1">Gmail 應用程式密碼</label><input type="password" placeholder="16 位密碼" className="input-field bg-white" value={config.pass} onChange={e => setConfig({...config, pass: e.target.value})} /></div>
-            </div>
+            <div className="space-y-6"><label className="flex items-center gap-5 p-5 bg-white rounded-3xl cursor-pointer border border-slate-100 hover:border-blue-200 transition-all shadow-sm"><input type="checkbox" className="w-6 h-6 text-blue-600 rounded-xl" checked={config.enabled} onChange={e => setConfig({...config, enabled: e.target.checked})} /><div className="flex-1"><div className="font-bold text-slate-700">啟用 Email 自動通知</div></div></label><div><label className="text-[10px] font-black text-slate-400 uppercase mb-3 block ml-1">寄件者名稱</label><input className="input-field bg-white" value={config.from_name} onChange={e => setConfig({...config, from_name: e.target.value})} /></div><div><label className="text-[10px] font-black text-slate-400 uppercase mb-3 block ml-1">Gmail 帳號</label><input className="input-field bg-white" value={config.user} onChange={e => setConfig({...config, user: e.target.value})} /></div><div><label className="text-[10px] font-black text-slate-400 uppercase mb-3 block ml-1">Gmail 應用程式密碼</label><input type="password" placeholder="16 位密碼" className="input-field bg-white" value={config.pass} onChange={e => setConfig({...config, pass: e.target.value})} /></div></div>
         ) : (
-            <div className="space-y-8">
-                <TemplateEditor label="新預約通知" tpl={templates.new_booking} onChange={v => setTemplates({...templates, new_booking: v})} hint="{name}, {date}, {time}" />
-                <TemplateEditor label="確認成功通知" tpl={templates.confirmed} onChange={v => setTemplates({...templates, confirmed: v})} hint="{name}, {date}, {time}" />
-                <TemplateEditor label="取消通知" tpl={templates.cancelled} onChange={v => setTemplates({...templates, cancelled: v})} hint="{name}, {date}, {time}, {reason}" />
-            </div>
+            <div className="space-y-8"><TemplateEditor label="新預約通知" tpl={templates.new_booking} onChange={v => setTemplates({...templates, new_booking: v})} hint="{name}, {date}, {time}" /><TemplateEditor label="確認成功通知" tpl={templates.confirmed} onChange={v => setTemplates({...templates, confirmed: v})} hint="{name}, {date}, {time}" /><TemplateEditor label="取消通知" tpl={templates.cancelled} onChange={v => setTemplates({...templates, cancelled: v})} hint="{name}, {date}, {time}, {reason}" /></div>
         )}
-        <div className="flex gap-4 pt-8 border-t border-slate-200 mt-8">
-            {activeSubTab === 'smtp' && <button onClick={handleTestEmail} disabled={testing} className="flex-1 bg-white text-slate-600 border-2 border-slate-100 py-4 rounded-2xl font-bold hover:bg-slate-50 hover:text-blue-600 transition-all">{testing ? '發送中...' : <><Send size={18} /> 測試發信</>}</button>}
-            <button onClick={saveSettings} className="flex-1 btn-primary py-4 font-black rounded-2xl text-lg flex items-center justify-center gap-3 shadow-lg shadow-blue-200">儲存所有設定</button>
-        </div>
+        <div className="flex gap-4 pt-8 border-t border-slate-200 mt-8">{activeSubTab === 'smtp' && <button onClick={handleTestEmail} disabled={testing} className="flex-1 bg-white text-slate-600 border-2 border-slate-100 py-4 rounded-2xl font-bold hover:bg-slate-50 hover:text-blue-600 transition-all">{testing ? '發送中...' : <><Send size={18} /> 測試發信</>}</button>}<button onClick={saveSettings} className="flex-1 btn-primary py-4 font-black rounded-2xl text-lg flex items-center justify-center gap-3 shadow-lg shadow-blue-200">儲存所有設定</button></div>
       </div>
     </div>
   );
 };
 
 const TemplateEditor: React.FC<{ label: string, tpl: any, onChange: (v: any) => void, hint: string }> = ({ label, tpl, onChange, hint }) => (
-    <div className="space-y-3">
-        <div className="flex justify-between items-center"><label className="text-sm font-bold text-slate-700">{label}</label><span className="text-[10px] text-slate-400 italic">可用變數: {hint}</span></div>
-        <input className="input-field bg-white text-sm" placeholder="郵件主旨" value={tpl.subject} onChange={e => onChange({...tpl, subject: e.target.value})} />
-        <textarea className="input-field bg-white text-sm" rows={3} placeholder="郵件內容" value={tpl.body} onChange={e => onChange({...tpl, body: e.target.value})} />
-    </div>
+    <div className="space-y-3"><div className="flex justify-between items-center"><label className="text-sm font-bold text-slate-700">{label}</label><span className="text-[10px] text-slate-400 italic">可用變數: {hint}</span></div><input className="input-field bg-white text-sm" placeholder="郵件主旨" value={tpl.subject} onChange={e => onChange({...tpl, subject: e.target.value})} /><textarea className="input-field bg-white text-sm" rows={3} placeholder="郵件內容" value={tpl.body} onChange={e => onChange({...tpl, body: e.target.value})} /></div>
 );
 
 const CustomerManager: React.FC = () => {

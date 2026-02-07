@@ -7,12 +7,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// 解決中文亂碼的編碼函式
 function encodeHeader(str: string): string {
   if (/^[\x00-\x7F]*$/.test(str)) return str;
   const encoder = new TextEncoder();
   const data = encoder.encode(str);
   let binary = "";
-  for (let i = 0; i < data.length; i++) binary += String.fromCharCode(data[i]);
+  for (const b of data) binary += String.fromCharCode(b);
   return `=?UTF-8?B?${btoa(binary)}?=`;
 }
 
@@ -21,37 +22,49 @@ serve(async (req) => {
 
   try {
     const { record_id, type, target_email } = await req.json()
-    const supabaseClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
-    const { data: settings } = await supabaseClient.from('system_settings').select('value').eq('key', 'email_config').maybeSingle()
-    const config = settings?.value
-    if (!config || !config.enabled) return new Response(JSON.stringify({ message: "Disabled" }), { headers: corsHeaders })
+    // 1. 讀取設定與範本
+    const { data: settings } = await supabase.from('system_settings').select('*').in('key', ['email_config', 'email_templates'])
+    
+    const config = settings?.find(s => s.key === 'email_config')?.value;
+    const templates = settings?.find(s => s.key === 'email_templates')?.value;
 
-    let toEmail = '', subject = '', htmlContent = '';
-    const siteUrl = Deno.env.get('PUBLIC_SITE_URL') || 'https://scorpioliu0953-booking.netlify.app';
+    if (!config || !config.enabled) return new Response(JSON.stringify({ message: "Email disabled" }), { headers: corsHeaders })
 
+    let toEmail = '', subject = '', body = '';
+
+    // --- 測試信分支 ---
     if (type === 'test') {
-      toEmail = (target_email || config.user).trim()
-      subject = '預約系統測試信'
-      htmlContent = '<h3>測試成功！</h3><p>您的發信功能運作正常。</p>'
-    } else {
-      const { data: apt } = await supabaseClient.from('appointments').select('*, customers(email, full_name)').eq('id', record_id).single()
-      if (!apt) throw new Error("Apt missing")
-      toEmail = apt.customers.email.trim()
-      const customerName = apt.customers.full_name
-      const info = `<div style="background:#f8fafc;padding:15px;border-radius:8px;margin:15px 0; border:1px solid #e2e8f0;">日期：${apt.booking_date}<br>時間：${apt.booking_time.slice(0,5)}</div>`
-      const detailBtn = `<br><a href="${siteUrl}/appointment/${record_id}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:10px;font-weight:bold;">查看預約詳細進度</a>`
+      toEmail = (target_email || config.user).trim();
+      subject = '發信功能測試成功';
+      body = '🎉 這是一封測試信，代表您的 SMTP 設定已生效。';
+    } 
+    // --- 正式通知分支 ---
+    else {
+      const { data: apt } = await supabase.from('appointments').select('*, customers(*)').eq('id', record_id).single()
+      if (!apt) throw new Error("Apt not found")
+      
+      toEmail = apt.customers.email.trim();
+      
+      // 根據 type 決定使用的範本 key
+      let tplKey = 'new_booking';
+      if (type === 'update' && apt.status === 'confirmed') tplKey = 'confirmed';
+      if (type === 'cancel' || apt.status === 'cancelled') tplKey = 'cancelled';
 
-      if (type === 'new') {
-        subject = '已收到預約申請'
-        htmlContent = `您好 ${customerName}，我們已收到您的申請，待確認中。${info}${detailBtn}`
-      } else if (type === 'update') {
-        subject = '預約確認成功通知'
-        htmlContent = `您好 ${customerName}，您的預約已確認成功！${info}${detailBtn}`
-      } else if (type === 'cancel') {
-        subject = '預約取消通知'
-        htmlContent = `您好 ${customerName}，您的預約已被取消。原因：${apt.cancellation_reason || '無'}${info}${detailBtn}`
-      }
+      const tpl = templates?.[tplKey] || { subject: '預約通知', body: '您的預約狀態已更新。' };
+      
+      // 變數替換邏輯
+      const replaceVars = (text: string) => {
+          return text
+            .replace(/{name}/g, apt.customers.full_name)
+            .replace(/{date}/g, apt.booking_date)
+            .replace(/{time}/g, apt.booking_time.slice(0,5))
+            .replace(/{reason}/g, apt.cancellation_reason || '無');
+      };
+
+      subject = replaceVars(tpl.subject);
+      body = replaceVars(tpl.body);
     }
 
     const client = new SMTPClient({
@@ -62,12 +75,21 @@ serve(async (req) => {
       from: config.user.trim(),
       to: toEmail,
       subject: encodeHeader(subject),
-      html: `<html><body style="font-family:sans-serif;color:#334155;">${htmlContent}</body></html>`,
+      html: `<html><body style="font-family:sans-serif;line-height:1.6;color:#334155;">
+        <div style="max-width:600px;margin:auto;padding:20px;border:1px solid #eee;border-radius:12px;">
+          ${body.replace(/\n/g, '<br>')}
+          <br><br>
+          <hr style="border:none;border-top:1px solid #eee;">
+          <p style="font-size:12px;color:#94a3b8;">此為系統自動發送，請勿直接回覆。</p>
+        </div>
+      </body></html>`,
     })
 
     await client.close()
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders, status: 200 })
+
   } catch (error: any) {
+    console.error(error)
     return new Response(JSON.stringify({ error: error.message }), { headers: corsHeaders, status: 500 })
   }
 })
