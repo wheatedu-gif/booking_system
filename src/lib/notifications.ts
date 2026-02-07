@@ -5,7 +5,7 @@ export const sendNotification = async (appointmentId: string, type: 'new' | 'upd
     console.log(`正在發送通知 (Type: ${type}, ID: ${appointmentId})...`);
     
     // 呼叫 Supabase Edge Function
-    // 注意：您必須先部署名為 'notify' 的 Function
+    // 我們使用 invoke 時會自動帶入 Auth Header
     const { data, error } = await supabase.functions.invoke('notify', {
       body: { 
         record_id: appointmentId, 
@@ -15,9 +15,8 @@ export const sendNotification = async (appointmentId: string, type: 'new' | 'upd
 
     if (error) {
       console.error('Notification Error:', error);
-      // 不要在這裡 throw error，以免阻斷原本的 UI 流程，Email 失敗不應導致操作失敗
     } else {
-      console.log('Notification sent:', data);
+      console.log('Notification sent response:', data);
     }
   } catch (err) {
     console.error('Notification Exception:', err);
