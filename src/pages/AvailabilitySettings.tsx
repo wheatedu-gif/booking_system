@@ -29,7 +29,11 @@ export const AvailabilitySettings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   
   // 預約規則
-  const [rules, setRules] = useState({ time_slot_minutes: 60, booking_window_days: 30 });
+  const [rules, setRules] = useState({ 
+    time_slot_minutes: 60, 
+    booking_window_days: 30,
+    max_concurrent_bookings: 1 
+  });
   
   // 新增例外日期
   const [newDate, setNewDate] = useState('');
@@ -43,7 +47,7 @@ export const AvailabilitySettings: React.FC = () => {
     setLoading(true);
     const { data: hoursData } = await supabase.from('business_hours').select('*').order('day_of_week');
     const { data: datesData } = await supabase.from('special_dates').select('*').order('date');
-    const { data: rulesData } = await supabase.from('system_settings').select('value').eq('key', 'booking_rules').single();
+    const { data: rulesData } = await supabase.from('system_settings').select('value').eq('key', 'booking_rules').maybeSingle();
     
     if (hoursData) setHours(hoursData);
     if (datesData) setSpecialDates(datesData);
@@ -71,15 +75,10 @@ export const AvailabilitySettings: React.FC = () => {
     const { error } = await supabase.from('special_dates').insert([{
       date: newDate,
       note: newDateNote,
-      is_closed: true // 預設為公休
+      is_closed: true
     }]);
-    
-    if (error) alert('新增失敗: ' + error.message);
-    else {
-      setNewDate('');
-      setNewDateNote('');
-      fetchData();
-    }
+    if (error) alert('新增失敗');
+    else { setNewDate(''); setNewDateNote(''); fetchData(); }
   };
 
   const deleteSpecialDate = async (id: string) => {
@@ -89,7 +88,6 @@ export const AvailabilitySettings: React.FC = () => {
 
   const updateSpecialDate = async (id: string, updates: Partial<SpecialDate>) => {
     await supabase.from('special_dates').update(updates).eq('id', id);
-    // 為了流暢體驗，這裡直接更新本地 state，不重抓
     setSpecialDates(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
   };
 
@@ -97,214 +95,44 @@ export const AvailabilitySettings: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      {/* 0. 預約規則設定 */}
       <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-            <Settings className="text-purple-600" size={24} /> 預約規則設定
-          </h2>
-          <button onClick={saveRules} className="btn-primary flex items-center gap-2 py-2 px-4 text-sm">
-            <Save size={16} /> 儲存規則
-          </button>
+          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Settings className="text-purple-600" /> 預約規則設定</h2>
+          <button onClick={saveRules} className="btn-primary flex items-center gap-2 py-2 px-4 text-sm"><Save size={16} /> 儲存規則</button>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2">預約時段間隔 (分鐘 / 每次服務時長)</label>
-            <div className="text-xs text-slate-500 mb-2">例如設定 45，則選項為 09:00, 09:45, 10:30...</div>
-            <div className="relative">
-               <input 
-                 type="number" 
-                 min="1" 
-                 max="1440"
-                 className="input-field pr-12"
-                 value={rules.time_slot_minutes}
-                 onChange={(e) => setRules({ ...rules, time_slot_minutes: parseInt(e.target.value) || 60 })}
-               />
-               <span className="absolute right-4 top-2 text-slate-500 text-sm">分鐘</span>
-            </div>
+            <label className="block text-sm font-bold text-slate-700 mb-2">預約時段間隔 (分鐘)</label>
+            <input type="number" className="input-field" value={rules.time_slot_minutes} onChange={(e) => setRules({ ...rules, time_slot_minutes: parseInt(e.target.value) || 60 })} />
           </div>
-
           <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2">開放預約天數 (Booking Window)</label>
-            <div className="text-xs text-slate-500 mb-2">例如設定 30，客戶只能預約未來 30 天內的日期</div>
-            <div className="relative">
-               <input 
-                 type="number" 
-                 min="1" 
-                 max="365"
-                 className="input-field pr-12"
-                 value={rules.booking_window_days}
-                 onChange={(e) => setRules({ ...rules, booking_window_days: parseInt(e.target.value) })}
-               />
-               <span className="absolute right-4 top-2 text-slate-500 text-sm">天</span>
-            </div>
+            <label className="block text-sm font-bold text-slate-700 mb-2">開放預約天數</label>
+            <input type="number" className="input-field" value={rules.booking_window_days} onChange={(e) => setRules({ ...rules, booking_window_days: parseInt(e.target.value) || 30 })} />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-2">同時段最大人數 (容量)</label>
+            <input type="number" min="1" className="input-field" value={rules.max_concurrent_bookings || 1} onChange={(e) => setRules({ ...rules, max_concurrent_bookings: parseInt(e.target.value) || 1 })} />
           </div>
         </div>
       </section>
 
-      {/* 1. 常規營業時間 */}
       <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-            <CalendarIcon className="text-blue-600" /> 常規營業時間
-          </h2>
-          <button onClick={saveHours} className="btn-primary flex items-center gap-2 py-2 px-4 text-sm">
-            <Save size={16} /> 儲存設定
-          </button>
+          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><CalendarIcon className="text-blue-600" /> 常規營業時間</h2>
+          <button onClick={saveHours} className="btn-primary flex items-center gap-2 py-2 px-4 text-sm"><Save size={16} /> 儲存設定</button>
         </div>
-
         <div className="space-y-4">
           {hours.map((day, index) => (
             <div key={day.day_of_week} className="flex flex-col md:flex-row md:items-center gap-4 p-4 bg-slate-50 rounded-lg border border-slate-100">
-              <div className="w-24 font-bold text-slate-700 flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={day.is_open}
-                  onChange={(e) => {
-                    const newHours = [...hours];
-                    newHours[index].is_open = e.target.checked;
-                    setHours(newHours);
-                  }}
-                  className="w-5 h-5 text-blue-600 rounded"
-                />
-                {DAYS[day.day_of_week]}
-              </div>
-
+              <div className="w-24 font-bold text-slate-700 flex items-center gap-2"><input type="checkbox" checked={day.is_open} onChange={(e) => { const n = [...hours]; n[index].is_open = e.target.checked; setHours(n); }} className="w-5 h-5 text-blue-600 rounded" />{DAYS[day.day_of_week]}</div>
               {day.is_open ? (
                 <div className="flex-1 flex flex-wrap gap-4 items-center">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-500">營業:</span>
-                    <input
-                      type="time"
-                      value={day.start_time.slice(0, 5)}
-                      onChange={(e) => {
-                        const newHours = [...hours];
-                        newHours[index].start_time = e.target.value;
-                        setHours(newHours);
-                      }}
-                      className="input-field w-32"
-                    />
-                    <span className="text-slate-400">-</span>
-                    <input
-                      type="time"
-                      value={day.end_time.slice(0, 5)}
-                      onChange={(e) => {
-                        const newHours = [...hours];
-                        newHours[index].end_time = e.target.value;
-                        setHours(newHours);
-                      }}
-                      className="input-field w-32"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2 border-l pl-4 border-slate-200">
-                    <span className="text-sm text-slate-500">午休 (選填):</span>
-                    <input
-                      type="time"
-                      value={day.break_start?.slice(0, 5) || ''}
-                      onChange={(e) => {
-                        const newHours = [...hours];
-                        newHours[index].break_start = e.target.value || null;
-                        setHours(newHours);
-                      }}
-                      className="input-field w-32"
-                    />
-                    <span className="text-slate-400">-</span>
-                    <input
-                      type="time"
-                      value={day.break_end?.slice(0, 5) || ''}
-                      onChange={(e) => {
-                        const newHours = [...hours];
-                        newHours[index].break_end = e.target.value || null;
-                        setHours(newHours);
-                      }}
-                      className="input-field w-32"
-                    />
-                  </div>
+                  <div className="flex items-center gap-2"><span className="text-sm text-slate-500">營業:</span><input type="time" value={day.start_time.slice(0, 5)} onChange={(e) => { const n = [...hours]; n[index].start_time = e.target.value; setHours(n); }} className="input-field w-32" /><span className="text-slate-400">-</span><input type="time" value={day.end_time.slice(0, 5)} onChange={(e) => { const n = [...hours]; n[index].end_time = e.target.value; setHours(n); }} className="input-field w-32" /></div>
+                  <div className="flex items-center gap-2 border-l pl-4 border-slate-200"><span className="text-sm text-slate-500">午休:</span><input type="time" value={day.break_start?.slice(0, 5) || ''} onChange={(e) => { const n = [...hours]; n[index].break_start = e.target.value || null; setHours(n); }} className="input-field w-32" /><span className="text-slate-400">-</span><input type="time" value={day.break_end?.slice(0, 5) || ''} onChange={(e) => { const n = [...hours]; n[index].break_end = e.target.value || null; setHours(n); }} className="input-field w-32" /></div>
                 </div>
-              ) : (
-                <span className="text-slate-400 font-medium italic">本日公休</span>
-              )}
+              ) : <span className="text-slate-400 font-medium italic">本日公休</span>}
             </div>
           ))}
-        </div>
-      </section>
-
-      {/* 2. 特殊日期/假日 */}
-      <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-          <CalendarIcon className="text-red-500" /> 特殊日期 / 公休設定
-        </h2>
-
-        <div className="flex gap-4 mb-6 items-end bg-slate-50 p-4 rounded-lg">
-          <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1">選擇日期</label>
-            <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="input-field" />
-          </div>
-          <div className="flex-1">
-            <label className="block text-xs font-bold text-slate-500 mb-1">備註 (例如: 春節)</label>
-            <input type="text" value={newDateNote} onChange={e => setNewDateNote(e.target.value)} className="input-field" placeholder="公休原因..." />
-          </div>
-          <button onClick={addSpecialDate} className="btn-primary py-2 px-4 h-10 flex items-center gap-1">
-            <Plus size={16} /> 新增
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          {specialDates.map((sd) => (
-            <div key={sd.id} className="flex items-center gap-4 p-3 border border-slate-100 rounded-lg hover:bg-slate-50">
-              <div className="w-32 font-bold text-slate-700">{sd.date}</div>
-              
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={sd.is_closed}
-                    onChange={() => updateSpecialDate(sd.id, { is_closed: true })}
-                    className="text-red-500"
-                  />
-                  <span className={sd.is_closed ? 'text-red-600 font-bold' : 'text-slate-600'}>公休</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer ml-4">
-                  <input
-                    type="radio"
-                    checked={!sd.is_closed}
-                    onChange={() => updateSpecialDate(sd.id, { is_closed: false })}
-                    className="text-green-500"
-                  />
-                  <span className={!sd.is_closed ? 'text-green-600 font-bold' : 'text-slate-600'}>調整營業時間</span>
-                </label>
-              </div>
-
-              {!sd.is_closed && (
-                 <div className="flex items-center gap-1 ml-4">
-                    <input 
-                      type="time" 
-                      value={sd.start_time?.slice(0,5) || '09:00'} 
-                      onChange={(e) => updateSpecialDate(sd.id, { start_time: e.target.value })}
-                      className="input-field w-24 py-1 text-sm" 
-                    />
-                    -
-                    <input 
-                      type="time" 
-                      value={sd.end_time?.slice(0,5) || '18:00'} 
-                      onChange={(e) => updateSpecialDate(sd.id, { end_time: e.target.value })}
-                      className="input-field w-24 py-1 text-sm" 
-                    />
-                 </div>
-              )}
-
-              <div className="flex-1 text-slate-500 text-sm px-4 border-l border-slate-200 ml-4">
-                 {sd.note}
-              </div>
-
-              <button onClick={() => deleteSpecialDate(sd.id)} className="text-slate-400 hover:text-red-500 p-2">
-                <Trash2 size={18} />
-              </button>
-            </div>
-          ))}
-          {specialDates.length === 0 && <div className="text-center text-slate-400 py-4">無特殊日期設定</div>}
         </div>
       </section>
     </div>
