@@ -110,18 +110,19 @@ export const AvailabilitySettings: React.FC = () => {
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2">預約時段間隔 (分鐘)</label>
-            <div className="text-xs text-slate-500 mb-2">例如設定 30，則選項為 09:00, 09:30, 10:00...</div>
-            <select 
-              className="input-field"
-              value={rules.time_slot_minutes}
-              onChange={(e) => setRules({ ...rules, time_slot_minutes: parseInt(e.target.value) })}
-            >
-              <option value="15">15 分鐘</option>
-              <option value="30">30 分鐘</option>
-              <option value="60">60 分鐘 (1小時)</option>
-              <option value="120">120 分鐘 (2小時)</option>
-            </select>
+            <label className="block text-sm font-bold text-slate-700 mb-2">預約時段間隔 (分鐘 / 每次服務時長)</label>
+            <div className="text-xs text-slate-500 mb-2">例如設定 45，則選項為 09:00, 09:45, 10:30...</div>
+            <div className="relative">
+               <input 
+                 type="number" 
+                 min="1" 
+                 max="1440"
+                 className="input-field pr-12"
+                 value={rules.time_slot_minutes}
+                 onChange={(e) => setRules({ ...rules, time_slot_minutes: parseInt(e.target.value) || 60 })}
+               />
+               <span className="absolute right-4 top-2 text-slate-500 text-sm">分鐘</span>
+            </div>
           </div>
 
           <div>
