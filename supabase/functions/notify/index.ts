@@ -1,5 +1,5 @@
 // ---------------------------------------------------------
-// Supabase Edge Function: notify (最終穩定版 - 解決亂碼與 500 錯誤)
+// Supabase Edge Function: notify (除錯加強版)
 // ---------------------------------------------------------
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
@@ -11,6 +11,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// 輔助函式：解決中文亂碼
 function encodeHeader(str: string): string {
   if (/^[\x00-\x7F]*$/.test(str)) return str;
   const encoder = new TextEncoder();
@@ -25,61 +26,69 @@ function encodeHeader(str: string): string {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
+  console.log("--- 收到發信請求 ---");
+
   try {
-    const { record_id, type, target_email } = await req.json()
+    const payload = await req.json();
+    const { record_id, type, target_email } = payload;
+    console.log("Payload:", JSON.stringify(payload));
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { data: settings } = await supabaseClient.from('system_settings').select('value').eq('key', 'email_config').maybeSingle()
-    const config = settings?.value
-    if (!config || !config.enabled) return new Response(JSON.stringify({ message: "Disabled" }), { headers: corsHeaders })
-
-    let toEmail = ''
-    let subject = ''
-    let html = ''
-
-    if (type === 'test') {
-      toEmail = (target_email || config.user).trim()
-      subject = '預約系統：發信功能測試成功'
-      html = `<h3>🎉 恭喜！測試信發送成功</h3><p>這代表您的 Gmail SMTP 與主旨編碼均已正確運作。</p><p>時間：${new Date().toLocaleString()}</p>`
-    } else {
-      const { data: apt } = await supabaseClient.from('appointments').select('*, customers(email, full_name)').eq('id', record_id).single()
-      if (!apt) throw new Error("Appointment not found")
-      toEmail = apt.customers.email.trim()
-      const details = `<br>日期：${apt.booking_date}<br>時間：${apt.booking_time.slice(0,5)}`
-      if (type === 'new') {
-        subject = '已收到您的預約申請'
-        html = `您好 ${apt.customers.full_name}，我們已收到您的預約申請，待確認中。${details}`
-      } else if (type === 'update' && apt.status === 'confirmed') {
-        subject = '預約確認成功通知'
-        html = `您好 ${apt.customers.full_name}，您的預約已確認成功！${details}`
-      } else if (type === 'cancel') {
-        subject = '預約取消通知'
-        html = `您好 ${apt.customers.full_name}，預約已取消。原因：${apt.cancellation_reason || '無'}${details}`
-      }
+    // 1. 讀取設定
+    const { data: settings, error: settingsError } = await supabaseClient.from('system_settings').select('value').eq('key', 'email_config').maybeSingle();
+    
+    if (settingsError) {
+        console.error("資料庫讀取設定失敗:", settingsError);
+        throw new Error("Settings fetch failed");
     }
 
+    const config = settings?.value;
+    if (!config || !config.enabled) {
+        console.log("Email 通知功能未啟用");
+        return new Response(JSON.stringify({ message: "Disabled" }), { headers: corsHeaders });
+    }
+
+    console.log("準備發送郵件，帳號:", config.user);
+
+    let toEmail = (target_email || config.user).trim();
+    let subject = type === 'test' ? '預約系統測試信' : '預約通知';
+    let content = '這是一封自動發送的信件。';
+
+    // 2. 建立 SMTP 連線並嘗試發信
+    console.log("正在連線到 smtp.gmail.com:465...");
+    
     const client = new SMTPClient({
       connection: {
         hostname: "smtp.gmail.com",
         port: 465,
         tls: true,
-        auth: { username: config.user.trim(), password: config.pass.trim() },
+        auth: { 
+          username: config.user.trim(), 
+          password: config.pass.trim() 
+        },
       },
     })
+
+    console.log("SMTP 連線物件已建立，準備傳送...");
 
     await client.send({
       from: config.user.trim(),
       to: toEmail,
       subject: encodeHeader(subject),
-      html: `<html><body style="font-family: sans-serif; color: #334155;">${html}</body></html>`,
+      html: `<html><body>${content}</body></html>`,
     })
 
-    await client.close()
+    await client.close();
+    console.log("郵件發送成功！");
+    
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders, status: 200 })
+
   } catch (error: any) {
+    console.error("【關鍵錯誤回報】:", error.message);
     return new Response(JSON.stringify({ error: error.message }), { headers: corsHeaders, status: 500 })
   }
 })
