@@ -5,6 +5,7 @@ import { FormDefinition } from '../types';
 import { Calendar, Clock, CheckCircle, ExternalLink, FileText, User, LogOut } from 'lucide-react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import { sendNotification } from '../lib/notifications';
 
 export const BookingPage: React.FC = () => {
   const { customer, loading: authLoading, logout } = useCustomer();
@@ -171,27 +172,12 @@ export const BookingPage: React.FC = () => {
         }
       ]).select().single();
 
-      import { sendNotification } from '../lib/notifications';
+      if (aptError) throw aptError;
 
-      
+      // 觸發 Email 通知 (新預約)
+      await sendNotification(aptData.id, 'new');
 
-      // ... (省略中間代碼)
-
-      
-
-            if (aptError) throw aptError;
-
-      
-
-            // 發送新預約通知
-
-            await sendNotification(aptData.id, 'new');
-
-      
-
-            setSuccessId(aptData.id);
-
-      
+      setSuccessId(aptData.id);
     } catch (err: any) {
       alert('預約失敗：' + err.message);
     } finally {
@@ -223,9 +209,9 @@ export const BookingPage: React.FC = () => {
     );
   }
 
-  // 取得特定系統欄位的標籤
+  // 取得特定系統欄位的標籤 (修正崩潰點：加上 ?.fields?.)
   const getLabel = (name: string, defaultLabel: string) => {
-    return bookingDef?.fields.find(f => (f as any).name === name)?.label || defaultLabel;
+    return bookingDef?.fields?.find((f: any) => f.name === name)?.label || defaultLabel;
   };
 
   return (
@@ -261,7 +247,7 @@ export const BookingPage: React.FC = () => {
             </div>
 
             {/* 其他自定義欄位 */}
-            {bookingDef?.fields.filter((f:any) => !f.isSystem).map((field) => (
+            {bookingDef?.fields?.filter((f:any) => !f.isSystem).map((field: any) => (
               <div key={field.id} className="mt-4">
                 <label className="block text-sm font-medium text-slate-700 mb-1">{field.label} {field.required && <span className="text-red-500">*</span>}</label>
                 <input type={field.type} required={field.required} className="input-field" onChange={(e) => setFormData({ ...formData, [field.label]: e.target.value })} />
