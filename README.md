@@ -37,13 +37,8 @@
 2.  進入專案的 **SQL Editor**。
 3.  點擊 **New Query**。
 4.  複製本專案根目錄下的 `INITIAL_SETUP.sql` 檔案內容。
-5.  貼上並點擊 **Run** 執行。這將會自動建立所有資料表、函數與權限設定。
-6.  (重要) 設定您的第一位管理員：
-    *   前往 **Authentication** > **Users**，手動新增一個使用者（這將是您的管理員帳號）。
-    *   回到 **SQL Editor**，執行以下指令將該帳號升級為管理員：
-        ```sql
-        UPDATE profiles SET role = 'admin' WHERE email = '您的管理員Email';
-        ```
+5.  貼上並點擊 **Run** 執行。這將會自動建立所有資料表、函數與權限設定，並自動同步現有的 Auth 帳號。
+6.  (重要) 前往 **Authentication** > **Users**，手動新增一個使用者（這將是您的管理員帳號），之後即可直接在網頁登入。
 
 ### 步驟 2：部署到 Netlify
 
