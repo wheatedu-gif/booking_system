@@ -404,37 +404,57 @@ const SettingsManager: React.FC = () => {
 
 const CustomerManager: React.FC = () => {
   const [customers, setCustomers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    supabase.from('profiles').select('*').eq('role', 'customer').then(({ data }) => setCustomers(data || []));
+    fetchCustomers();
   }, []);
+
+  const fetchCustomers = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('customers') // 改為讀取 customers 表
+      .select('*')
+      .order('created_at', { ascending: false });
+    setCustomers(data || []);
+    setLoading(false);
+  };
+
+  if (loading) return <div className="text-center py-8">載入客戶資料中...</div>;
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-slate-800 mb-6">客戶管理</h2>
+      <h2 className="text-xl font-bold text-slate-800 mb-6">客戶管理 (註冊會員)</h2>
       <div className="overflow-x-auto">
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-slate-100">
               <th className="py-3 px-4 font-semibold text-slate-600">客戶名稱</th>
               <th className="py-3 px-4 font-semibold text-slate-600">Email</th>
+              <th className="py-3 px-4 font-semibold text-slate-600">電話</th>
               <th className="py-3 px-4 font-semibold text-slate-600">註冊時間</th>
-              <th className="py-3 px-4 font-semibold text-slate-600">自定義資料</th>
+              <th className="py-3 px-4 font-semibold text-slate-600">詳細資料</th>
             </tr>
           </thead>
           <tbody>
             {customers.map((c) => (
-              <tr key={c.id} className="border-b border-slate-50">
-                <td className="py-4 px-4 text-sm font-medium">{c.full_name}</td>
+              <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50">
+                <td className="py-4 px-4 text-sm font-medium text-slate-900">{c.full_name}</td>
                 <td className="py-4 px-4 text-sm text-slate-500">{c.email}</td>
+                <td className="py-4 px-4 text-sm text-slate-500">{c.phone || '-'}</td>
                 <td className="py-4 px-4 text-sm text-slate-500">{new Date(c.created_at).toLocaleDateString()}</td>
                 <td className="py-4 px-4 text-xs text-slate-400">
-                  <pre>{JSON.stringify(c.custom_data, null, 2)}</pre>
+                  <pre className="max-w-[200px] truncate" title={JSON.stringify(c.custom_data, null, 2)}>
+                    {JSON.stringify(c.custom_data)}
+                  </pre>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        {customers.length === 0 && (
+          <div className="text-center py-12 text-slate-400">尚無註冊會員</div>
+        )}
       </div>
     </div>
   );
