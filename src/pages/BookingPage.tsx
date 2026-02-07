@@ -20,6 +20,7 @@ export const BookingPage: React.FC = () => {
   const [businessHours, setBusinessHours] = useState<any[]>([]);
   const [specialDates, setSpecialDates] = useState<any[]>([]);
   const [bookingRules, setBookingRules] = useState({ time_slot_minutes: 60, booking_window_days: 30 });
+  const [occupiedIntervals, setOccupiedIntervals] = useState<{start: number, end: number}[]>([]); // 佔用區間
 
   // 表單欄位定義
   const [bookingDef, setBookingDef] = useState<FormDefinition | null>(null);
@@ -72,11 +73,38 @@ export const BookingPage: React.FC = () => {
     fetchAll();
   }, []);
 
+  // 當日期或規則改變時，查詢佔用狀況
+  useEffect(() => {
+    const fetchOccupied = async () => {
+        if (!bookingDate) return;
+        
+        // 查詢當天所有非 'cancelled' 的預約
+        const { data } = await supabase
+            .from('appointments')
+            .select('booking_time')
+            .eq('booking_date', bookingDate)
+            .neq('status', 'cancelled'); 
+        
+        const serviceDuration = bookingRules.time_slot_minutes || 60;
+        
+        // 將預約時間轉換為分鐘區間 [start, end]
+        const intervals = data?.map(d => {
+            const startMin = parseTime(d.booking_time.slice(0, 5));
+            return { start: startMin, end: startMin + serviceDuration };
+        }) || [];
+        
+        setOccupiedIntervals(intervals);
+    };
+
+    fetchOccupied();
+  }, [bookingDate, bookingRules]);
+
+  // 計算可用時段
   useEffect(() => {
     if (bookingDate && businessHours.length > 0) {
       generateTimeSlots(bookingDate);
     }
-  }, [bookingDate, businessHours, specialDates, bookingRules]);
+  }, [bookingDate, businessHours, specialDates, bookingRules, occupiedIntervals]);
 
   const parseTime = (t: string) => {
     const [h, m] = t.split(':').map(Number);
@@ -132,13 +160,34 @@ export const BookingPage: React.FC = () => {
     let count = 0;
     while (current < endTime && count < 96) { 
       count++;
-      if (bStart !== -1 && bEnd !== -1 && current >= bStart && current < bEnd) {
-        current = bEnd;
-        continue;
+      const currentEnd = current + step;
+
+      // 午休檢查 (與午休區間重疊則跳過)
+      // 區間A: [current, currentEnd], 區間B: [bStart, bEnd]
+      // 重疊條件: current < bEnd && currentEnd > bStart
+      if (bStart !== -1 && bEnd !== -1) {
+          if (current < bEnd && currentEnd > bStart) {
+             // 遇到午休，移動到午休結束時間
+             // 如果 current 已經大於等於 bEnd (邏輯上不可能，因為上面的條件)，則加 step
+             if (current < bEnd) current = bEnd;
+             else current += step;
+             continue;
+          }
       }
-      if (current + step <= endTime) {
-         slots.push(formatTime(current));
+      
+      // 確保時段完全在營業時間內
+      if (currentEnd <= endTime) {
+         // **關鍵：檢查是否與已預約區間重疊**
+         // 重疊條件: current < interval.end && currentEnd > interval.start
+         const isOccupied = occupiedIntervals.some(interval => {
+             return current < interval.end && currentEnd > interval.start;
+         });
+
+         if (!isOccupied) {
+             slots.push(formatTime(current));
+         }
       }
+      
       current += step; 
     }
     
@@ -174,7 +223,6 @@ export const BookingPage: React.FC = () => {
 
       if (aptError) throw aptError;
 
-      // 觸發 Email 通知 (新預約)
       await sendNotification(aptData.id, 'new');
 
       setSuccessId(aptData.id);
@@ -189,7 +237,13 @@ export const BookingPage: React.FC = () => {
     if (!bookingTime) return '#';
     const start = `${bookingDate.replace(/-/g, '')}T${bookingTime.replace(/:/g, '')}00`;
     const [h, m] = bookingTime.split(':').map(Number);
-    const end = `${bookingDate.replace(/-/g, '')}T${(h + 1).toString().padStart(2, '0')}${m.toString().padStart(2, '0')}00`;
+    // 計算結束時間 (根據設定的時長)
+    const duration = bookingRules.time_slot_minutes || 60;
+    const endTotalMinutes = h * 60 + m + duration;
+    const endH = Math.floor(endTotalMinutes / 60);
+    const endM = endTotalMinutes % 60;
+    
+    const end = `${bookingDate.replace(/-/g, '')}T${endH.toString().padStart(2, '0')}${endM.toString().padStart(2, '0')}00`;
     return `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('預約服務')}&dates=${start}/${end}&details=${encodeURIComponent('預約人: ' + customer?.full_name)}&sf=true&output=xml`;
   };
 
@@ -209,7 +263,7 @@ export const BookingPage: React.FC = () => {
     );
   }
 
-  // 取得特定系統欄位的標籤 (修正崩潰點：加上 ?.fields?.)
+  // 取得特定系統欄位的標籤
   const getLabel = (name: string, defaultLabel: string) => {
     return bookingDef?.fields?.find((f: any) => f.name === name)?.label || defaultLabel;
   };
