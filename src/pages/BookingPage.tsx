@@ -171,8 +171,27 @@ export const BookingPage: React.FC = () => {
         }
       ]).select().single();
 
-      if (aptError) throw aptError;
-      setSuccessId(aptData.id);
+      import { sendNotification } from '../lib/notifications';
+
+      
+
+      // ... (省略中間代碼)
+
+      
+
+            if (aptError) throw aptError;
+
+      
+
+            // 發送新預約通知
+
+            await sendNotification(aptData.id, 'new');
+
+      
+
+            setSuccessId(aptData.id);
+
+      
     } catch (err: any) {
       alert('預約失敗：' + err.message);
     } finally {
