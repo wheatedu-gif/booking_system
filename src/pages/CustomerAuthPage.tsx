@@ -46,7 +46,7 @@ export const CustomerAuthPage: React.FC = () => {
 
     try {
       if (isSignUp) {
-        await register(email, password, fullName);
+        await register(email, password, fullName, phone);
       } else {
         await login(email, password);
       }
@@ -74,6 +74,16 @@ export const CustomerAuthPage: React.FC = () => {
               <div className="relative">
                 <input type="text" required className="input-field pl-10" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="王大明" />
                 <User size={18} className="absolute left-3 top-3 text-slate-400" />
+              </div>
+            </div>
+          )}
+
+          {isSignUp && (
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">{labels.phone}</label>
+              <div className="relative">
+                <input type="tel" className="input-field pl-10" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0912-345-678" />
+                <Phone size={18} className="absolute left-3 top-3 text-slate-400" />
               </div>
             </div>
           )}

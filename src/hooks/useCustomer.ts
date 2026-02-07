@@ -45,11 +45,12 @@ export function useCustomer() {
     return user;
   };
 
-  const register = async (email: string, pass: string, name: string) => {
+  const register = async (email: string, pass: string, name: string, phone?: string) => {
     const { data, error } = await supabase.rpc('register_customer', {
       p_email: email,
       p_password: pass,
-      p_full_name: name
+      p_full_name: name,
+      p_custom_data: { phone } // 將電話存入 custom_data
     });
 
     if (error) throw error;
