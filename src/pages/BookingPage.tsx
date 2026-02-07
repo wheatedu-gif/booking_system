@@ -6,10 +6,12 @@ import { Calendar, Clock, CheckCircle, ExternalLink, FileText, User, LogOut } fr
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { sendNotification } from '../lib/notifications';
+import { useToast } from '../components/Toast';
 
 export const BookingPage: React.FC = () => {
   const { customer, loading: authLoading, logout } = useCustomer();
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const [bookingDate, setBookingDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [bookingTime, setBookingTime] = useState('');
@@ -36,7 +38,6 @@ export const BookingPage: React.FC = () => {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
   };
 
-  // 封裝查詢佔用邏輯
   const fetchOccupied = useCallback(async (targetDate: string) => {
     if (!targetDate) return;
     const { data } = await supabase
@@ -132,14 +133,13 @@ export const BookingPage: React.FC = () => {
       }]).select().single();
       if (aptError) throw aptError;
       
-      // 先觸發 Email
+      showToast('預約已送出，正在發送通知...');
       await sendNotification(aptData.id, 'new');
-      
-      // 成功後立即重新查詢佔用狀態
-      await fetchOccupied(bookingDate);
-      
+      await fetchOccupied(bookingDate); 
       setSuccessId(aptData.id);
-    } catch (err: any) { alert('預約失敗：' + err.message); }
+    } catch (err: any) { 
+      showToast('預約失敗：' + err.message, 'error'); 
+    }
     finally { setSubmitting(false); }
   };
 
@@ -149,18 +149,13 @@ export const BookingPage: React.FC = () => {
 
   if (successId) {
     return (
-      <div className="max-w-md mx-auto mt-12 text-center p-8 bg-white rounded-2xl shadow-lg border border-green-100">
+      <div className="max-w-md mx-auto mt-12 text-center p-10 bg-white rounded-[3rem] shadow-xl border border-green-100 animate-in zoom-in-95">
         <div className="text-green-500 mb-6 flex justify-center"><CheckCircle size={80} /></div>
-        <h2 className="text-3xl font-bold text-slate-800 mb-3">預約已提交！</h2>
-        <p className="text-slate-600 mb-8 text-lg">感謝您的預約，<span className="font-semibold">{customer?.full_name}</span>。</p>
+        <h2 className="text-3xl font-black text-slate-800 mb-3">預約已提交！</h2>
+        <p className="text-slate-600 mb-8 text-lg font-medium">感謝您的預約，<span className="text-blue-600 font-bold">{customer?.full_name}</span>。</p>
         <div className="space-y-4">
-          <button onClick={() => { 
-              setSuccessId(null); 
-              setBookingTime(''); 
-              setFormData({});
-              fetchOccupied(bookingDate); // 點擊再次預約時，再次強制刷新
-          }} className="w-full btn-primary py-4 text-lg font-bold shadow-lg shadow-blue-200">再次預約</button>
-          <button onClick={() => navigate('/my-appointments')} className="w-full py-3 text-slate-500 font-medium hover:bg-slate-50 rounded-lg border border-slate-200">查看預約紀錄</button>
+          <button onClick={() => { setSuccessId(null); setBookingTime(''); setFormData({}); fetchOccupied(bookingDate); }} className="w-full btn-primary py-5 rounded-2xl font-black shadow-xl shadow-blue-200 transform transition-all active:scale-[0.98]">再次預約</button>
+          <button onClick={() => navigate('/my-appointments')} className="w-full py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors">查看我的紀錄</button>
         </div>
       </div>
     );
@@ -172,43 +167,43 @@ export const BookingPage: React.FC = () => {
 
   return (
     <div className="max-w-3xl mx-auto py-12 px-4">
-      <div className="flex justify-between items-center mb-6">
-          <div><span className="text-slate-500">歡迎回來，</span><span className="font-bold text-slate-800">{customer?.full_name}</span></div>
-          <button onClick={() => { logout(); navigate('/login'); }} className="text-sm text-red-500 hover:underline flex items-center gap-1"><LogOut size={14}/> 登出</button>
+      <div className="flex justify-between items-center mb-8">
+          <div className="bg-white px-6 py-3 rounded-2xl shadow-sm border border-slate-100"><span className="text-slate-400 font-medium">您好，</span><span className="font-bold text-slate-800">{customer?.full_name}</span></div>
+          <button onClick={() => { logout(); navigate('/login'); }} className="p-3 bg-red-50 text-red-500 rounded-2xl hover:bg-red-100 transition-all"><LogOut size={20}/></button>
       </div>
-      <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 text-white">
-          <h1 className="text-3xl font-bold flex items-center gap-3"><Calendar /> 預約服務</h1>
-          <p className="text-blue-100 mt-2 text-lg">請選擇日期與時段</p>
+      <div className="bg-white rounded-[3rem] shadow-2xl shadow-slate-200/50 overflow-hidden border border-slate-100">
+        <div className="bg-blue-600 p-10 text-white">
+          <h1 className="text-3xl font-black flex items-center gap-3 tracking-tight"><Calendar size={32} /> 預約服務</h1>
+          <p className="text-blue-100 mt-2 text-lg font-medium opacity-80">請選擇日期與時段</p>
         </div>
-        <form onSubmit={handleSubmit} className="p-8 space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <form onSubmit={handleSubmit} className="p-10 space-y-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">{getLabel('date', '預約日期')} <span className="text-red-500">*</span></label>
-              <input type="date" required className="input-field" value={bookingDate} min={format(new Date(), 'yyyy-MM-dd')} max={maxDateStr} onChange={(e) => setBookingDate(e.target.value)} />
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">{getLabel('date', '預約日期')} <span className="text-red-500">*</span></label>
+              <input type="date" required className="input-field bg-slate-50 border-none rounded-2xl py-4 focus:bg-white shadow-inner" value={bookingDate} min={format(new Date(), 'yyyy-MM-dd')} max={maxDateStr} onChange={(e) => setBookingDate(e.target.value)} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">{getLabel('time', '預約時間')} <span className="text-red-500">*</span></label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">{getLabel('time', '預約時間')} <span className="text-red-500">*</span></label>
               {availableSlots.length > 0 ? (
-                <select className="input-field" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)}>
+                <select className="input-field bg-slate-50 border-none rounded-2xl py-4 focus:bg-white shadow-inner appearance-none" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)}>
                   {availableSlots.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
-              ) : <div className="text-red-500 text-sm mt-2 p-2 bg-red-50 rounded border border-red-100 font-bold">本日已無可用時段</div>}
+              ) : <div className="p-4 bg-red-50 text-red-500 rounded-2xl text-sm font-bold border border-red-100">本日已無可用時段</div>}
             </div>
           </div>
           {bookingDef?.fields?.filter((f:any) => !f.isSystem).map((field: any) => (
             <div key={field.id} className="mt-4">
-              <label className="block text-sm font-medium text-slate-700 mb-1">{field.label} {field.required && <span className="text-red-500">*</span>}</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">{field.label} {field.required && <span className="text-red-500">*</span>}</label>
               {field.type === 'select' ? (
-                <select required={field.required} className="input-field" onChange={(e) => setFormData({ ...formData, [field.label]: e.target.value })}>
+                <select required={field.required} className="input-field bg-slate-50 border-none rounded-2xl py-4 shadow-inner appearance-none" onChange={(e) => setFormData({ ...formData, [field.label]: e.target.value })}>
                   <option value="">請選擇...</option>
                   {field.options?.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
-              ) : <input type={field.type} required={field.required} className="input-field" onChange={(e) => setFormData({ ...formData, [field.label]: e.target.value })} />}
+              ) : <input type={field.type} required={field.required} className="input-field bg-slate-50 border-none rounded-2xl py-4 shadow-inner" onChange={(e) => setFormData({ ...formData, [field.label]: e.target.value })} />}
             </div>
           ))}
-          <button type="submit" disabled={submitting} className="w-full btn-primary py-4 text-xl font-bold shadow-lg shadow-blue-200 mt-8">
-            {submitting ? '提交預約中...' : '確認送出預約'}
+          <button type="submit" disabled={submitting} className="w-full btn-primary py-5 rounded-2xl text-xl font-black shadow-xl shadow-blue-200 transform transition-all active:scale-[0.98] disabled:opacity-50">
+            {submitting ? '提交預約中...' : '確認預約'}
           </button>
         </form>
       </div>
