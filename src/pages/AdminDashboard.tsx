@@ -37,8 +37,9 @@ export const AdminDashboard: React.FC = () => {
     const { error } = await supabase.from('appointments').update({ status, cancellation_reason: reason || null }).eq('id', id);
     if (error) showToast('更新失敗', 'error');
     else {
-      showToast(status === 'confirmed' ? '已確認' : status === 'completed' ? '標記完成' : '已取消');
-      if (status !== 'completed') await sendNotification(id, status === 'cancelled' ? 'cancel' : 'update');
+      showToast(status === 'confirmed' ? '已確認預約' : status === 'completed' ? '已標記完成並發送感謝信' : '已取消預約');
+      // 關鍵修復：所有狀態變更均觸發 notify (內部邏輯會判斷 status 並選擇範本)
+      await sendNotification(id, status === 'cancelled' ? 'cancel' : 'update');
       fetchData();
     }
   };
@@ -87,6 +88,7 @@ const DashboardHome: React.FC<{ appointments: Appointment[], customers: any[] }>
         completed: appointments.filter(a => a.status === 'completed').length,
         newMonth: customers.filter(c => isSameMonth(parseISO(c.created_at), new Date())).length
     };
+    const maxCount = Math.max(...Array.from({length: 7}, (_, i) => appointments.filter(a => a.booking_date === format(addDays(new Date(), i), 'yyyy-MM-dd')).length), 1);
     return (
         <div className="space-y-10 animate-in fade-in duration-500">
             <h2 className="text-3xl font-black text-slate-800 tracking-tight">營運儀表板</h2>
@@ -96,18 +98,20 @@ const DashboardHome: React.FC<{ appointments: Appointment[], customers: any[] }>
                 <StatCard icon={<CheckCircle2 />} title="已完成服務" value={stats.completed} color="green" />
                 <StatCard icon={<Users />} title="本月新客" value={stats.newMonth} color="purple" />
             </div>
-            <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 min-h-[300px] flex flex-col">
-                <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">近期預約動態</h3>
-                <div className="space-y-3">
-                    {appointments.slice(0, 5).map(apt => (
-                        <div key={apt.id} className="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-white">
-                            <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center font-bold font-mono">{(apt as any).customers?.full_name?.[0]}</div>
-                                <div><div className="font-bold text-slate-800">{(apt as any).customers?.full_name}</div><div className="text-xs text-slate-400">{apt.booking_date} {apt.booking_time.slice(0,5)}</div></div>
+            <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 min-h-[300px] flex flex-col shadow-inner shadow-slate-200/50">
+                <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-10 flex items-center gap-2"><BarChart3 size={16}/> 未來七日預約趨勢</h3>
+                <div className="flex-1 flex items-end justify-between gap-4 px-4">
+                    {Array.from({length: 7}).map((_, i) => {
+                        const d = addDays(new Date(), i);
+                        const count = appointments.filter(a => a.booking_date === format(d, 'yyyy-MM-dd') && a.status !== 'cancelled').length;
+                        return (
+                            <div key={i} className="flex-1 flex flex-col items-center gap-3 group">
+                                <div className="text-[10px] font-bold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">{count}</div>
+                                <div style={{ height: `${(count/maxCount) * 100}%`, minHeight: '4px' }} className={`w-full max-w-[40px] rounded-t-xl transition-all duration-500 ${isToday(d) ? 'bg-blue-600 shadow-lg' : 'bg-slate-300'}`}></div>
+                                <div className="text-[10px] font-black text-slate-400 uppercase">{format(d, 'MM/dd')}</div>
                             </div>
-                            <span className="text-[10px] font-black uppercase px-3 py-1 rounded-full bg-slate-100 text-slate-500">{apt.status}</span>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
         </div>
@@ -115,10 +119,11 @@ const DashboardHome: React.FC<{ appointments: Appointment[], customers: any[] }>
 };
 
 const StatCard: React.FC<{ icon: React.ReactNode, title: string, value: number, color: string }> = ({ icon, title, value, color }) => {
-    const cMap: any = { blue: 'bg-blue-50 text-blue-600', amber: 'bg-amber-50 text-amber-600', green: 'bg-green-50 text-green-600', purple: 'bg-purple-50 text-purple-600' };
+    const bgMap: any = { blue: 'bg-blue-50', amber: 'bg-amber-50', green: 'bg-green-50', purple: 'bg-purple-50' };
+    const textMap: any = { blue: 'text-blue-600', amber: 'text-amber-600', green: 'text-green-600', purple: 'text-purple-600' };
     return (
         <div className="bg-white p-8 rounded-[2rem] border border-slate-50 shadow-sm flex flex-col gap-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${cMap[color]}`}>{icon}</div>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${bgMap[color]} ${textMap[color]}`}>{icon}</div>
             <div><div className="text-slate-400 text-xs font-bold uppercase tracking-widest">{title}</div><div className="text-4xl font-black text-slate-800 mt-1">{value}</div></div>
         </div>
     );
@@ -143,7 +148,7 @@ const AppointmentManager: React.FC<{ appointments: Appointment[], onStatusChange
         <div className="overflow-hidden border border-slate-100 rounded-3xl"><table className="w-full text-left border-collapse"><thead className="bg-slate-50/50"><tr><th className="py-5 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest">時間</th><th className="py-5 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest">客戶</th><th className="py-5 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest">狀態</th><th className="py-5 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">動作</th></tr></thead><tbody className="divide-y divide-slate-50">{filtered.map(apt => (
                 <tr key={apt.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => setSelectedApt(apt)}><td className="py-5 px-6"><div className="font-bold text-slate-700">{apt.booking_date}</div><div className="text-blue-500 text-xs font-medium">{apt.booking_time.slice(0,5)}</div></td><td className="py-5 px-6"><div className="font-bold text-slate-700 group-hover:text-blue-600 transition-all flex items-center gap-2">{(apt as any).customers?.full_name} <ExternalLink size={12} className="opacity-0 group-hover:opacity-100" /></div><div className="text-slate-400 text-xs font-medium">{(apt as any).customers?.email}</div></td><td className="py-5 px-6"><span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${apt.status === 'confirmed' ? 'bg-green-100 text-green-800' : apt.status === 'completed' ? 'bg-slate-100 text-slate-600' : apt.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{apt.status}</span></td><td className="py-5 px-6 text-right" onClick={e => e.stopPropagation()}><div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all">
                     {apt.status === 'pending' && <button onClick={() => onStatusChange(apt.id, 'confirmed')} className="bg-green-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-sm shadow-green-100 hover:bg-green-600">確認</button>}
-                    {apt.status === 'confirmed' && <button onClick={() => onStatusChange(apt.id, 'completed')} className="bg-blue-600 text-white px-4 py-1.5 rounded-xl text-xs font-bold hover:bg-blue-700">完成</button>}
+                    {apt.status === 'confirmed' && isPast(parseISO(apt.booking_date)) && <button onClick={() => onStatusChange(apt.id, 'completed')} className="bg-blue-600 text-white px-4 py-1.5 rounded-xl text-xs font-bold hover:bg-blue-700">完成</button>}
                     {apt.status !== 'cancelled' && apt.status !== 'completed' && <button onClick={() => { const r = window.prompt('原因'); if(r!==null) onStatusChange(apt.id, 'cancelled', r); }} className="text-slate-400 hover:text-red-500 font-bold text-xs">取消</button>}
                 </div></td></tr>))}</tbody></table></div>
       )}
@@ -231,9 +236,7 @@ const SettingsManager: React.FC = () => {
   const [testing, setTesting] = useState(false);
   const { showToast } = useToast();
   useEffect(() => {
-    supabase.from('system_settings').select('*').in('key', ['email_config', 'email_templates']).then(({ data }) => {
-        data?.forEach(d => { if (d.key === 'email_config') setConfig(d.value); if (d.key === 'email_templates') setTemplates(d.value); });
-    });
+    supabase.from('system_settings').select('*').in('key', ['email_config', 'email_templates']).then(({ data }) => { data?.forEach(d => { if (d.key === 'email_config') setConfig(d.value); if (d.key === 'email_templates') setTemplates(d.value); }); });
     if (activeSubTab === 'logs') supabase.from('email_logs').select('*').order('created_at', { ascending: false }).limit(20).then(({ data }) => setEmailLogs(data || []));
   }, [activeSubTab]);
   const saveSettings = async () => { await supabase.from('system_settings').upsert([{ key: 'email_config', value: config }, { key: 'email_templates', value: templates }]); showToast('系統設定已儲存'); };
