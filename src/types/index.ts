@@ -16,6 +16,7 @@ export interface FormField {
   type: 'text' | 'number' | 'select' | 'date' | 'tel';
   required: boolean;
   options?: string[]; // 用於 select 類型
+  isSystem?: boolean; // 標記是否為系統預設欄位
 }
 
 export interface FormDefinition {
