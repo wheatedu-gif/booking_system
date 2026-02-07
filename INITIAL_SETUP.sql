@@ -5,7 +5,7 @@
 -- 0. 環境準備
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- 1. 清理舊結構 (執行此腳本會重設所有資料，請謹慎使用)
+-- 1. 清理舊結構 (確保環境乾淨)
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP TRIGGER IF EXISTS trg_check_capacity ON appointments;
 DROP FUNCTION IF EXISTS handle_new_admin_user();
@@ -74,7 +74,8 @@ CREATE TABLE business_hours (day_of_week INT PRIMARY KEY CHECK (day_of_week BETW
 CREATE TABLE special_dates (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), date DATE UNIQUE NOT NULL, is_closed BOOLEAN DEFAULT true, start_time TIME, end_time TIME, note TEXT);
 CREATE TABLE system_settings (key TEXT PRIMARY KEY, value JSONB NOT NULL);
 
--- 3. 安全性政策 (RLS)
+-- 3. 設定 RLS 政策 (Row Level Security)
+
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
@@ -85,17 +86,17 @@ ALTER TABLE business_hours ENABLE ROW LEVEL SECURITY;
 ALTER TABLE special_dates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Admin Control" ON profiles FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Admin Control Customers" ON customers FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Admin Control Apts" ON appointments FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Admin Control Logs" ON email_logs FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Admin Control Content" ON page_content FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Admin Control Forms" ON form_definitions FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Admin Control Business" ON business_hours FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Admin Control Special" ON special_dates FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Admin Control Settings" ON system_settings FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Admin All" ON profiles FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Admin All Customers" ON customers FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Admin All Apts" ON appointments FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Admin All Logs" ON email_logs FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Admin All Content" ON page_content FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Admin All Forms" ON form_definitions FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Admin All Business" ON business_hours FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Admin All Special" ON special_dates FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Admin All Settings" ON system_settings FOR ALL USING (auth.role() = 'authenticated');
 
-CREATE POLICY "Public Read" ON page_content FOR SELECT USING (true);
+CREATE POLICY "Public Read Only" ON page_content FOR SELECT USING (true);
 CREATE POLICY "Public Read Forms" ON form_definitions FOR SELECT USING (true);
 CREATE POLICY "Public Read Business" ON business_hours FOR SELECT USING (true);
 CREATE POLICY "Public Read Special" ON special_dates FOR SELECT USING (true);
@@ -105,7 +106,7 @@ CREATE POLICY "Public Update Apt" ON appointments FOR UPDATE USING (true);
 
 -- 4. 自動化邏輯 (Functions & Triggers)
 
--- [防呆] 檢查同時段預約人數是否客滿
+-- [防呆] 檢查同時段預約人數是否客滿 (後端強制限制)
 CREATE OR REPLACE FUNCTION check_booking_capacity()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -153,7 +154,7 @@ RETURNS jsonb AS $$
 DECLARE target RECORD;
 BEGIN
   SELECT * INTO target FROM customers WHERE email = p_email;
-  IF target IS NULL OR target.password_hash != crypt(p_password, target.password_hash) THEN RETURN jsonb_build_object('success', false, 'message', '帳號或密碼錯誤'); END IF;
+  IF target IS NULL OR target.password_hash != crypt(p_password, target.password_hash) THEN RETURN jsonb_build_object('success', false, 'message', '帳號密碼錯誤'); END IF;
   RETURN jsonb_build_object('success', true, 'data', jsonb_build_object('id', target.id, 'email', target.email, 'full_name', target.full_name));
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -177,7 +178,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE PROCEDURE handle_new_admin_user();
 
--- 5. 初始化系統資料
+-- 5. 初始化系統預設值
 
 INSERT INTO form_definitions (type, fields) VALUES 
 ('customer_profile', '[{"id": "sys_name", "name": "full_name", "label": "姓名", "type": "text", "required": true, "isSystem": true}, {"id": "sys_email", "name": "email", "label": "電子郵件", "type": "text", "required": true, "isSystem": true}]'::jsonb),
@@ -188,10 +189,16 @@ INSERT INTO business_hours (day_of_week, is_open, start_time, end_time) VALUES (
 INSERT INTO system_settings (key, value) VALUES 
 ('booking_rules', '{"time_slot_minutes": 60, "booking_window_days": 30, "max_concurrent_bookings": 1, "allow_customer_cancel": true, "cancel_before_hours": 24}'::jsonb),
 ('email_config', '{"enabled": false, "user": "", "pass": "", "from_name": "預約系統"}'::jsonb),
-('email_templates', '{"new_booking": {"subject": "收到預約申請", "body": "您好 {name}，預約待處理中。"}, "confirmed": {"subject": "預約確認成功", "body": "您好 {name}，預約已確認！"}, "cancelled": {"subject": "預約取消通知", "body": "您好 {name}，預約已取消。"}, "completed": {"subject": "感謝您的光臨", "body": "您好 {name}，感謝光臨！"}}'::jsonb);
+('email_templates', '{
+  "new_booking": {"subject": "收到預約申請", "body": "您好 {name}，預約待處理中。"},
+  "confirmed": {"subject": "預約確認成功", "body": "您好 {name}，您的預約已確認成功！"},
+  "cancelled": {"subject": "預約取消通知", "body": "您好 {name}，您的預約已取消。"},
+  "completed": {"subject": "感謝您的光臨", "body": "您好 {name}，感謝光臨！"}
+}'::jsonb);
 
 INSERT INTO page_content (section_key, content) VALUES 
 ('landing_page', $$ { "brand_name": "智慧預約", "hero": {"title": "專業預約管理", "subtitle": "流暢預約體驗"}, "features": [] } $$),
-('terms_and_privacy', $$ { "terms": "請在此填寫您的服務條款...", "privacy": "請在此填寫您的隱私權政策..." } $$);
+('terms_and_privacy', $$ { "terms": "請在此填寫條款內容...", "privacy": "請在此填寫隱私權政策..." } $$);
 
-INSERT INTO public.profiles (id, email, full_name, role) SELECT id, email, COALESCE(raw_user_meta_data->>'full_name', 'Admin'), 'admin' FROM auth.users ON CONFLICT (id) DO UPDATE SET role = 'admin';
+-- 同步現有帳號
+INSERT INTO public.profiles (id, email, full_name, role) SELECT id, email, COALESCE(raw_user_meta_data->>'full_name', 'Administrator'), 'admin' FROM auth.users ON CONFLICT (id) DO UPDATE SET role = 'admin';
