@@ -199,12 +199,25 @@ export const BookingPage: React.FC = () => {
               ) : <div className="text-red-500 text-sm mt-2 p-2 bg-red-50 rounded border border-red-100">本日已無可用時段</div>}
             </div>
           </div>
-          {bookingDef?.fields?.filter((f:any) => !f.isSystem).map((field: any) => (
-            <div key={field.id} className="mt-4">
-              <label className="block text-sm font-medium text-slate-700 mb-1">{field.label} {field.required && <span className="text-red-500">*</span>}</label>
-              <input type={field.type} required={field.required} className="input-field" onChange={(e) => setFormData({ ...formData, [field.label]: e.target.value })} />
-            </div>
-          ))}
+            {bookingDef?.fields?.filter((f:any) => !f.isSystem).map((field: any) => (
+              <div key={field.id} className="mt-4">
+                <label className="block text-sm font-medium text-slate-700 mb-1">{field.label} {field.required && <span className="text-red-500">*</span>}</label>
+                {field.type === 'select' ? (
+                  <select 
+                    required={field.required} 
+                    className="input-field" 
+                    onChange={(e) => setFormData({ ...formData, [field.label]: e.target.value })}
+                  >
+                    <option value="">請選擇...</option>
+                    {field.options?.map((opt: string) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input type={field.type} required={field.required} className="input-field" onChange={(e) => setFormData({ ...formData, [field.label]: e.target.value })} />
+                )}
+              </div>
+            ))}
           <button type="submit" disabled={submitting} className="w-full btn-primary py-4 text-xl font-bold shadow-lg shadow-blue-200 mt-8">
             {submitting ? '提交預約中...' : '確認送出預約'}
           </button>

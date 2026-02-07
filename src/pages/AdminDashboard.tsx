@@ -241,8 +241,44 @@ const FormManager: React.FC<{ formDefs: FormDefinition[], onRefresh: () => void 
               <div key={field.id} className={`flex gap-6 p-5 rounded-2xl border transition-all ${field.isSystem ? 'bg-slate-50/50 border-slate-100' : 'bg-white border-slate-200 shadow-sm'}`}>
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div><label className="text-[10px] font-bold text-slate-400 flex items-center gap-1 uppercase tracking-widest mb-2">{field.isSystem && <Lock size={10} />} 顯示標籤 (Label)</label><input className="input-field bg-white" value={field.label} onChange={(e) => { const newFields = [...editingDef.fields]; newFields[index].label = e.target.value; setEditingDef({ ...editingDef, fields: newFields }); }} /></div>
-                  <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">欄位類型</label><div className="mt-1 text-sm font-bold text-slate-600 px-4 py-3 bg-slate-100/50 rounded-xl">{field.type} {field.isSystem && ' (核心預設)'}</div></div>
-                </div>
+                                    <div>
+                                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">欄位類型</label>
+                                      <select 
+                                        className="input-field disabled:bg-slate-50 disabled:text-slate-400" 
+                                        value={field.type} 
+                                        disabled={field.isSystem}
+                                        onChange={(e) => {
+                                          const newFields = [...editingDef.fields];
+                                          newFields[index].type = e.target.value as any;
+                                          setEditingDef({ ...editingDef, fields: newFields });
+                                        }}
+                                      >
+                                        <option value="text">單行文字</option>
+                                        <option value="number">數字數字</option>
+                                        <option value="date">日期選擇</option>
+                                        <option value="tel">電話號碼</option>
+                                        <option value="select">下拉選單 (Select)</option>
+                                      </select>
+                                    </div>
+                                  </div>
+                  
+                                  {/* 下拉選單選項編輯 */}
+                                  {field.type === 'select' && (
+                                    <div className="mt-4 p-4 bg-blue-50/50 rounded-xl border border-blue-100">
+                                      <label className="block text-[10px] font-bold text-blue-400 uppercase mb-2">選單選項 (請用逗號分隔)</label>
+                                      <input 
+                                        className="input-field bg-white border-blue-200 focus:border-blue-500" 
+                                        placeholder="例如：選項A,選項B,選項C"
+                                        value={field.options?.join(',') || ''}
+                                        onChange={(e) => {
+                                          const newFields = [...editingDef.fields];
+                                          newFields[index].options = e.target.value.split(',').map(s => s.trim()).filter(s => s !== '');
+                                          setEditingDef({ ...editingDef, fields: newFields });
+                                        }}
+                                      />
+                                    </div>
+                                  )}
+                  
                 {!field.isSystem && <button onClick={() => { const newFields = editingDef.fields.filter((_:any, i:any) => i !== index); setEditingDef({ ...editingDef, fields: newFields }); }} className="text-red-400 p-3 mt-6 hover:bg-red-50 rounded-xl"><Trash2 size={20} /></button>}
               </div>
             ))}

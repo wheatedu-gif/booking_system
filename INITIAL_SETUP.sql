@@ -1,5 +1,5 @@
 -- =========================================================
--- 智慧預約系統 - 終極全功能整合初始化腳本 (V6 旗艦版)
+-- 智慧預約系統 - 終極全功能整合初始化腳本 (V7 功能完備版)
 -- =========================================================
 
 -- 0. 環境與擴充功能
@@ -22,7 +22,6 @@ DROP TABLE IF EXISTS profiles CASCADE;
 
 -- 2. 建立資料表
 
--- [管理員資料表]
 CREATE TABLE profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   email TEXT NOT NULL,
@@ -32,7 +31,6 @@ CREATE TABLE profiles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [一般客戶資料表]
 CREATE TABLE customers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT UNIQUE NOT NULL,
@@ -44,7 +42,6 @@ CREATE TABLE customers (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [預約紀錄表]
 CREATE TABLE appointments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id UUID REFERENCES customers(id) ON DELETE CASCADE,
@@ -57,19 +54,15 @@ CREATE TABLE appointments (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 防重複預約索引
-CREATE UNIQUE INDEX idx_prevent_double_booking 
-ON appointments (booking_date, booking_time) 
-WHERE (status != 'cancelled');
+CREATE UNIQUE INDEX idx_prevent_double_booking ON appointments (booking_date, booking_time) WHERE (status != 'cancelled');
 
--- [其餘資料表]
 CREATE TABLE page_content (section_key TEXT PRIMARY KEY, content JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW());
 CREATE TABLE form_definitions (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), type TEXT NOT NULL, fields JSONB NOT NULL DEFAULT '[]'::jsonb, updated_at TIMESTAMPTZ DEFAULT NOW());
 CREATE TABLE business_hours (day_of_week INT PRIMARY KEY CHECK (day_of_week BETWEEN 0 AND 6), is_open BOOLEAN DEFAULT true, start_time TIME DEFAULT '09:00', end_time TIME DEFAULT '18:00', break_start TIME DEFAULT '12:00', break_end TIME DEFAULT '13:00');
 CREATE TABLE special_dates (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), date DATE UNIQUE NOT NULL, is_closed BOOLEAN DEFAULT true, start_time TIME, end_time TIME, note TEXT);
 CREATE TABLE system_settings (key TEXT PRIMARY KEY, value JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW());
 
--- 3. 設定 RLS 政策
+-- 3. RLS 政策
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
