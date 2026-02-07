@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useCustomer } from '../hooks/useCustomer';
 import { Appointment } from '../types';
 import { Calendar, Clock, AlertCircle, ExternalLink, Trash2, Info } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 export const MyAppointments: React.FC = () => {
   const { customer, loading: authLoading } = useCustomer();
@@ -97,8 +97,9 @@ export const MyAppointments: React.FC = () => {
       ) : (
         <div className="space-y-6">
           {appointments.map((apt) => (
-            <div key={apt.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-              <div className="p-6">
+            <Link key={apt.id} to={`/appointment/${apt.id}`} className="block">
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-xl hover:border-blue-200 transition-all duration-300 group">
+                <div className="p-6">
                 <div className="flex flex-col md:flex-row justify-between gap-6">
                   {/* 左側：基本資訊 */}
                   <div className="flex-1 space-y-4">

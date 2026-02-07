@@ -9,6 +9,7 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { BookingPage } from './pages/BookingPage';
 import { MyAppointments } from './pages/MyAppointments';
 import { ProfilePage } from './pages/ProfilePage';
+import { AppointmentDetailPage } from './pages/AppointmentDetailPage';
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
             <Route path="/booking" element={<BookingPage />} />
             <Route path="/my-appointments" element={<MyAppointments />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/appointment/:id" element={<AppointmentDetailPage />} />
             
             {/* 管理端路由 */}
             <Route path="/admin/login" element={<AdminLoginPage />} />
