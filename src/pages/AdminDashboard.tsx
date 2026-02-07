@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { FormDefinition, FormField, Appointment } from '../types';
-import { Plus, Trash2, Save, Settings, Users, Calendar as CalendarIcon, FormInput, Clock, LayoutTemplate, List, ChevronLeft, ChevronRight, Lock, AlertCircle, Download, Send, Edit3, X, TrendingUp, Search, ExternalLink, LayoutDashboard, FileText, StickyNote, History, CheckCircle2, CalendarPlus, BarChart3, KeyRound, Mail, Eye } from 'lucide-react';
+import { Plus, Trash2, Save, Settings, Users, Calendar as CalendarIcon, FormInput, Clock, LayoutTemplate, List, ChevronLeft, ChevronRight, Lock, AlertCircle, Download, Send, Edit3, X, TrendingUp, Search, ExternalLink, LayoutDashboard, FileText, StickyNote, History, CheckCircle2, CalendarPlus, BarChart3, KeyRound, Mail, Eye, RefreshCw } from 'lucide-react';
 import { AvailabilitySettings } from './AvailabilitySettings';
 import { WebsiteEditor } from './WebsiteEditor';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO, isToday, isPast, addDays } from 'date-fns';
@@ -17,9 +17,9 @@ export const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const { showToast } = useToast();
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (silent = false) => {
     if (activeTab === 'cms' || activeTab === 'availability') { setLoading(false); return; }
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const { data: apts } = await supabase.from('appointments').select('*, customers(*)').order('booking_date', { ascending: false });
       setAppointments(apts || []);
@@ -31,21 +31,27 @@ export const AdminDashboard: React.FC = () => {
     setLoading(false);
   }, [activeTab]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  // 每 60 秒自動重新整理
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(() => fetchData(true), 60000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const updateAppointmentStatus = async (id: string, status: string, reason?: string) => {
     const { error } = await supabase.from('appointments').update({ status, cancellation_reason: reason || null }).eq('id', id);
     if (error) showToast('更新失敗', 'error');
     else {
-      showToast(status === 'confirmed' ? '已確認' : status === 'completed' ? '標記完成' : '已取消');
-      if (status !== 'completed') await sendNotification(id, status === 'cancelled' ? 'cancel' : 'update');
-      fetchData();
+      showToast(status === 'confirmed' ? '預約已確認' : status === 'completed' ? '已標記完成' : '預約已取消');
+      await sendNotification(id, status === 'cancelled' ? 'cancel' : 'update');
+      fetchData(true);
     }
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex flex-col lg:flex-row gap-8">
+        {/* Sidebar */}
         <div className="w-full lg:w-64 space-y-2 shrink-0">
           <SidebarButton active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<LayoutDashboard size={20}/>} label="營運概況" />
           <SidebarButton active={activeTab === 'appointments'} onClick={() => setActiveTab('appointments')} icon={<CalendarIcon size={20}/>} label="預約管理" />
@@ -54,18 +60,26 @@ export const AdminDashboard: React.FC = () => {
           <SidebarButton active={activeTab === 'forms'} onClick={() => setActiveTab('forms')} icon={<FormInput size={20}/>} label="表單設定" />
           <SidebarButton active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} icon={<Users size={20}/>} label="客戶管理" />
           <SidebarButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={20}/>} label="系統設定" />
+          
+          <div className="pt-4 mt-4 border-t border-slate-100 px-4">
+              <div className="flex items-center gap-2 text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">
+                  <RefreshCw size={10} className="animate-spin-slow" /> Auto Refresh On
+              </div>
+          </div>
         </div>
+
+        {/* Content Area */}
         <div className="flex-1 bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden min-h-[700px]">
-          {loading && activeTab !== 'cms' && activeTab !== 'availability' && activeTab !== 'settings' ? (
+          {loading && activeTab !== 'cms' && activeTab !== 'availability' && activeTab !== 'settings' && activeTab !== 'home' ? (
             <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>
           ) : activeTab === 'cms' ? <WebsiteEditor /> : (
             <div className="p-8">
-                {activeTab === 'home' && <DashboardHome appointments={appointments} customers={customers} />}
-                {activeTab === 'appointments' && <AppointmentManager appointments={appointments} onStatusChange={updateAppointmentStatus} onRefresh={fetchData} formDefs={formDefs} />}
+                {activeTab === 'home' && <DashboardHome appointments={appointments} customers={customers} onStatusChange={updateAppointmentStatus} />}
+                {activeTab === 'appointments' && <AppointmentManager appointments={appointments} onStatusChange={updateAppointmentStatus} onRefresh={() => fetchData(true)} formDefs={formDefs} />}
                 {activeTab === 'availability' && <AvailabilitySettings />}
-                {activeTab === 'forms' && <FormManager formDefs={formDefs} onRefresh={fetchData} />}
+                {activeTab === 'forms' && <FormManager formDefs={formDefs} onRefresh={() => fetchData(true)} />}
                 {activeTab === 'settings' && <SettingsManager />}
-                {activeTab === 'customers' && <CustomerManager customers={customers} onRefresh={fetchData} allAppointments={appointments} formDefs={formDefs} />}
+                {activeTab === 'customers' && <CustomerManager customers={customers} onRefresh={() => fetchData(true)} allAppointments={appointments} formDefs={formDefs} />}
             </div>
           )}
         </div>
@@ -80,7 +94,7 @@ const SidebarButton: React.FC<{ active: boolean, onClick: () => void, icon: Reac
   </button>
 );
 
-const DashboardHome: React.FC<{ appointments: Appointment[], customers: any[] }> = ({ appointments, customers }) => {
+const DashboardHome: React.FC<{ appointments: Appointment[], customers: any[], onStatusChange: (id: string, s: string) => void }> = ({ appointments, customers, onStatusChange }) => {
     const stats = {
         today: appointments.filter(a => isToday(parseISO(a.booking_date)) && a.status !== 'cancelled').length,
         pending: appointments.filter(a => a.status === 'pending').length,
@@ -88,29 +102,50 @@ const DashboardHome: React.FC<{ appointments: Appointment[], customers: any[] }>
         newMonth: customers.filter(c => isSameMonth(parseISO(c.created_at), new Date())).length
     };
     const maxCount = Math.max(...Array.from({length: 7}, (_, i) => appointments.filter(a => a.booking_date === format(addDays(new Date(), i), 'yyyy-MM-dd')).length), 1);
+    const todayAgenda = appointments.filter(a => isToday(parseISO(a.booking_date)) && a.status === 'confirmed').sort((a,b) => a.booking_time.localeCompare(b.booking_time));
+
     return (
         <div className="space-y-10 animate-in fade-in duration-500">
-            <h2 className="text-3xl font-black text-slate-800 tracking-tight">營運儀表板</h2>
+            <h2 className="text-3xl font-black text-slate-800 tracking-tight">營運概況</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard icon={<CalendarIcon />} title="今日預約" value={stats.today} color="blue" />
                 <StatCard icon={<AlertCircle />} title="待處理" value={stats.pending} color="amber" />
                 <StatCard icon={<CheckCircle2 />} title="已完成服務" value={stats.completed} color="green" />
                 <StatCard icon={<Users />} title="本月新客" value={stats.newMonth} color="purple" />
             </div>
-            <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 min-h-[300px] flex flex-col shadow-inner shadow-slate-200/50">
-                <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-10 flex items-center gap-2"><BarChart3 size={16}/> 未來七日預約趨勢</h3>
-                <div className="flex-1 flex items-end justify-between gap-4 px-4">
-                    {Array.from({length: 7}).map((_, i) => {
-                        const d = addDays(new Date(), i);
-                        const count = appointments.filter(a => a.booking_date === format(d, 'yyyy-MM-dd') && a.status !== 'cancelled').length;
-                        return (
-                            <div key={i} className="flex-1 flex flex-col items-center gap-3 group">
-                                <div className="text-[10px] font-bold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">{count}</div>
-                                <div style={{ height: `${(count/maxCount) * 100}%`, minHeight: '4px' }} className={`w-full max-w-[40px] rounded-t-xl transition-all duration-500 ${isToday(d) ? 'bg-blue-600 shadow-lg' : 'bg-slate-300'}`}></div>
-                                <div className="text-[10px] font-black text-slate-400 uppercase">{format(d, 'MM/dd')}</div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                <div className="lg:col-span-3 bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 flex flex-col h-full shadow-inner">
+                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-10 flex items-center gap-2"><BarChart3 size={16}/> 未來七日趨勢</h3>
+                    <div className="flex-1 flex items-end justify-between gap-4 px-4 min-h-[200px]">
+                        {Array.from({length: 7}).map((_, i) => {
+                            const d = addDays(new Date(), i);
+                            const count = appointments.filter(a => a.booking_date === format(d, 'yyyy-MM-dd') && a.status !== 'cancelled').length;
+                            return (
+                                <div key={i} className="flex-1 flex flex-col items-center gap-3 group">
+                                    <div className="text-[10px] font-bold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">{count}</div>
+                                    <div style={{ height: `${(count/maxCount) * 100}%`, minHeight: '4px' }} className={`w-full max-w-[40px] rounded-t-xl transition-all duration-500 ${isToday(d) ? 'bg-blue-600 shadow-lg' : 'bg-slate-300'}`}></div>
+                                    <div className="text-[10px] font-black text-slate-400 uppercase">{format(d, 'MM/dd')}</div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                <div className="lg:col-span-2 bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl">
+                    <h3 className="text-sm font-black text-blue-400 uppercase tracking-widest mb-6 flex items-center gap-2">今日行程表</h3>
+                    <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+                        {todayAgenda.map(apt => (
+                            <div key={apt.id} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex justify-between items-center group hover:bg-white/10 transition-all">
+                                <div className="flex items-center gap-4">
+                                    <div className="text-blue-400 font-mono font-bold text-sm">{apt.booking_time.slice(0,5)}</div>
+                                    <div><div className="font-bold text-sm">{(apt as any).customers?.full_name}</div><div className="text-[10px] text-white/40">已確認</div></div>
+                                </div>
+                                <button onClick={() => onStatusChange(apt.id, 'completed')} className="opacity-0 group-hover:opacity-100 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-all shadow-lg"><CheckCircle2 size={16}/></button>
                             </div>
-                        );
-                    })}
+                        ))}
+                        {todayAgenda.length === 0 && <div className="p-10 text-center text-white/20 font-bold italic text-sm">本日無預計行程</div>}
+                    </div>
                 </div>
             </div>
         </div>
@@ -118,15 +153,16 @@ const DashboardHome: React.FC<{ appointments: Appointment[], customers: any[] }>
 };
 
 const StatCard: React.FC<{ icon: React.ReactNode, title: string, value: number, color: string }> = ({ icon, title, value, color }) => {
-    const bgMap: any = { blue: 'bg-blue-50', amber: 'bg-amber-50', green: 'bg-green-50', purple: 'bg-purple-50' };
-    const textMap: any = { blue: 'text-blue-600', amber: 'text-amber-600', green: 'text-green-600', purple: 'text-purple-600' };
+    const cMap: any = { blue: 'bg-blue-50 text-blue-600', amber: 'bg-amber-50 text-amber-600', green: 'bg-green-50 text-green-600', purple: 'bg-purple-50 text-purple-600' };
     return (
         <div className="bg-white p-8 rounded-[2rem] border border-slate-50 shadow-sm flex flex-col gap-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${bgMap[color]} ${textMap[color]}`}>{icon}</div>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${cMap[color]}`}>{icon}</div>
             <div><div className="text-slate-400 text-xs font-bold uppercase tracking-widest">{title}</div><div className="text-4xl font-black text-slate-800 mt-1">{value}</div></div>
         </div>
     );
 };
+
+// --- 其他子組件保持穩定 ---
 
 const AppointmentManager: React.FC<{ appointments: Appointment[], onStatusChange: (id: string, s: string, reason?: string) => void, onRefresh: () => void, formDefs: FormDefinition[] }> = ({ appointments, onStatusChange, onRefresh, formDefs }) => {
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
@@ -136,13 +172,7 @@ const AppointmentManager: React.FC<{ appointments: Appointment[], onStatusChange
   const filtered = appointments.filter(apt => (apt as any).customers?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || (apt as any).customers?.email?.toLowerCase().includes(searchTerm.toLowerCase()) || apt.booking_date.includes(searchTerm));
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-        <div className="relative w-full md:w-96"><input type="text" placeholder="搜尋姓名、Email、日期..." className="input-field pl-12 py-3 bg-slate-50 border-none rounded-2xl w-full focus:bg-white transition-all shadow-inner" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /><Search size={20} className="absolute left-4 top-3.5 text-slate-300" /></div>
-        <div className="flex gap-3">
-            <button onClick={() => setShowAddModal(true)} className="btn-primary flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold shadow-lg shadow-blue-100 active:scale-95 transition-all"><Plus size={18}/> 新增預約</button>
-            <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shrink-0"><button onClick={() => setViewMode('list')} className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>列表</button><button onClick={() => setViewMode('calendar')} className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${viewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>日曆</button></div>
-        </div>
-      </div>
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4"><div className="relative w-full md:w-96"><input type="text" placeholder="搜尋姓名、Email、日期..." className="input-field pl-12 py-3 bg-slate-50 border-none rounded-2xl w-full focus:bg-white transition-all shadow-inner" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /><Search size={20} className="absolute left-4 top-3.5 text-slate-300" /></div><div className="flex gap-3"><button onClick={() => setShowAddModal(true)} className="btn-primary flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold shadow-lg shadow-blue-100 active:scale-95 transition-all"><Plus size={18}/> 新增預約</button><div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shrink-0"><button onClick={() => setViewMode('list')} className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>列表</button><button onClick={() => setViewMode('calendar')} className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${viewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>日曆</button></div></div></div>
       {viewMode === 'calendar' ? <AppointmentCalendar appointments={filtered} onStatusChange={onStatusChange} onSelect={setSelectedApt} /> : (
         <div className="overflow-hidden border border-slate-100 rounded-3xl"><table className="w-full text-left border-collapse"><thead className="bg-slate-50/50"><tr><th className="py-5 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest">時間</th><th className="py-5 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest">客戶</th><th className="py-5 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest">狀態</th><th className="py-5 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">動作</th></tr></thead><tbody className="divide-y divide-slate-50">{filtered.map(apt => (
                 <tr key={apt.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => setSelectedApt(apt)}><td className="py-5 px-6"><div className="font-bold text-slate-700">{apt.booking_date}</div><div className="text-blue-500 text-xs font-medium">{apt.booking_time.slice(0,5)}</div></td><td className="py-5 px-6"><div className="font-bold text-slate-700 group-hover:text-blue-600 transition-all flex items-center gap-2">{(apt as any).customers?.full_name} <ExternalLink size={12} className="opacity-0 group-hover:opacity-100" /></div><div className="text-slate-400 text-xs font-medium">{(apt as any).customers?.email}</div></td><td className="py-5 px-6"><span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${apt.status === 'confirmed' ? 'bg-green-100 text-green-800' : apt.status === 'completed' ? 'bg-slate-100 text-slate-600' : apt.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{apt.status}</span></td><td className="py-5 px-6 text-right" onClick={e => e.stopPropagation()}><div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all">
@@ -234,7 +264,8 @@ const SettingsManager: React.FC = () => {
   const [emailLogs, setEmailLogs] = useState<any[]>([]);
   const [testing, setTesting] = useState(false);
   const { showToast } = useToast();
-  useEffect(() => { supabase.from('system_settings').select('*').in('key', ['email_config', 'email_templates']).then(({ data }) => { data?.forEach(d => { if (d.key === 'email_config') setConfig(d.value); if (d.key === 'email_templates') setTemplates(d.value); }); });
+  useEffect(() => {
+    supabase.from('system_settings').select('*').in('key', ['email_config', 'email_templates']).then(({ data }) => { data?.forEach(d => { if (d.key === 'email_config') setConfig(d.value); if (d.key === 'email_templates') setTemplates(d.value); }); });
     if (activeSubTab === 'logs') supabase.from('email_logs').select('*').order('created_at', { ascending: false }).limit(20).then(({ data }) => setEmailLogs(data || []));
   }, [activeSubTab]);
   const saveSettings = async () => { await supabase.from('system_settings').upsert([{ key: 'email_config', value: config }, { key: 'email_templates', value: templates }]); showToast('系統設定已儲存'); };
@@ -258,13 +289,7 @@ const TemplateEditor: React.FC<{ label: string, tpl: any, onChange: (v: any) => 
             <div className="flex justify-between items-center"><label className="text-sm font-bold text-slate-700">{label}</label><div className="flex items-center gap-3"><span className="text-[10px] text-slate-400 italic">可用變數: {hint}</span><button onClick={() => setShowPreview(!showPreview)} className="p-1.5 text-slate-400 hover:text-blue-600 transition-colors" title="預覽範本"><Eye size={16}/></button></div></div>
             <input className="input-field bg-white text-sm font-bold" placeholder="郵件主旨" value={tpl?.subject || ''} onChange={e => onChange({...tpl, subject: e.target.value})} />
             <textarea className="input-field bg-white text-sm" rows={3} placeholder="郵件內容" value={tpl?.body || ''} onChange={e => onChange({...tpl, body: e.target.value})} />
-            {showPreview && (
-                <div className="absolute top-full left-0 right-0 z-50 mt-2 p-6 bg-slate-900 text-white rounded-2xl shadow-2xl animate-in slide-in-from-top-2">
-                    <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10"><div className="text-[10px] font-black uppercase tracking-widest text-blue-400">範本效果預覽</div><button onClick={() => setShowPreview(false)}><X size={14}/></button></div>
-                    <div className="font-bold text-sm mb-2">主旨：{replaceVars(tpl?.subject || '')}</div>
-                    <div className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">{replaceVars(tpl?.body || '')}</div>
-                </div>
-            )}
+            {showPreview && (<div className="absolute top-full left-0 right-0 z-50 mt-2 p-6 bg-slate-900 text-white rounded-2xl shadow-2xl animate-in slide-in-from-top-2"><div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10"><div className="text-[10px] font-black uppercase tracking-widest text-blue-400">範本效果預覽</div><button onClick={() => setShowPreview(false)}><X size={14}/></button></div><div className="font-bold text-sm mb-2">主旨：{replaceVars(tpl?.subject || '')}</div><div className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">{replaceVars(tpl?.body || '')}</div></div>)}
         </div>
     );
 };
@@ -279,15 +304,9 @@ const CustomerManager: React.FC<{ customers: any[], onRefresh: () => void, allAp
   const filtered = customers.filter(c => c.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || c.email?.toLowerCase().includes(searchTerm.toLowerCase()) || c.phone?.includes(searchTerm));
   const handleResetPass = async (e: React.FormEvent) => { e.preventDefault(); const newPass = (e.target as any).newPass.value; if (!newPass) return; const { data, error } = await supabase.rpc('admin_reset_customer_password', { p_customer_id: resetPassId, p_new_password: newPass }); if (error || !data.success) showToast('重設失敗', 'error'); else { showToast('密碼已成功重設'); setResetPassId(null); } };
   const handleDelete = async (id: string) => { if (!window.confirm('確定要刪除此會員嗎？相關預約也會一併刪除。')) return; const { error } = await supabase.from('customers').delete().eq('id', id); if (error) showToast('刪除失敗', 'error'); else { showToast('會員已刪除'); onRefresh(); } };
-  const downloadCSV = () => {
-      const rows = [["姓名", "Email", "電話", "註冊時間"].join(",")];
-      filtered.forEach(c => rows.push([c.full_name, c.email, c.phone || '', format(parseISO(c.created_at), 'yyyy-MM-dd HH:mm')].join(",")));
-      const blob = new Blob(["\uFEFF" + rows.join("\n")], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `會員清單_${format(new Date(), 'yyyyMMdd')}.csv`; link.click();
-  };
   return (
     <div className="space-y-8 relative animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4"><h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3"><Users className="text-blue-600" /> 會員資料庫</h2><div className="flex items-center gap-3 shrink-0"><button onClick={downloadCSV} className="p-3 bg-slate-100 text-slate-500 rounded-xl hover:bg-white hover:text-blue-600 shadow-sm transition-all"><Download size={20}/></button><div className="relative w-full md:w-80"><input type="text" placeholder="搜尋姓名、電話..." className="input-field pl-12 py-3 bg-slate-50 border-none rounded-2xl w-full focus:bg-white transition-all shadow-inner" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /><Search size={20} className="absolute left-4 top-3.5 text-slate-300" /></div></div></div>
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4"><h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3"><Users className="text-blue-600" /> 會員資料庫</h2><div className="relative w-full md:w-80"><input type="text" placeholder="搜尋姓名、電話..." className="input-field pl-12 py-3 bg-slate-50 border-none rounded-2xl w-full focus:bg-white transition-all shadow-inner" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /><Search size={20} className="absolute left-4 top-3.5 text-slate-300" /></div></div>
       <div className="grid gap-4">{filtered.map(c => (
           <div key={c.id} className="p-6 bg-slate-50/50 rounded-[2rem] flex justify-between items-center border border-slate-50 hover:bg-white transition-all group"><div className="flex items-center gap-5 cursor-pointer" onClick={() => setViewHistory(c)}><div className="w-14 h-14 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner shadow-blue-200/50">{c.full_name[0]}</div><div><div className="font-bold text-lg text-slate-800 group-hover:text-blue-600 transition-colors flex items-center gap-2">{c.full_name} <History size={14} className="text-slate-300" /></div><div className="text-xs text-slate-400 font-bold">{c.email}</div></div></div><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => setEditingCustomer(c)} className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl" title="編輯資料"><Edit3 size={20} /></button><button onClick={() => setResetPassId(c.id)} className="p-3 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl" title="重設密碼"><KeyRound size={20} /></button><button onClick={() => setQuickBookingId(c.id)} className="p-3 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-xl" title="快速預約"><CalendarPlus size={20} /></button><button onClick={() => handleDelete(c.id)} className="p-3 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl" title="刪除"><Trash2 size={20} /></button></div></div>
         ))}</div>
