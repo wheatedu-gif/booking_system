@@ -7,16 +7,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-function encodeBase64(str: string): string {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(str);
-  let binary = "";
-  for (let i = 0; i < data.length; i++) {
-    binary += String.fromCharCode(data[i]);
-  }
-  return `=?UTF-8?B?${btoa(binary)}?=`;
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -27,6 +17,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
+    // 1. 讀取設定
     const { data: settings } = await supabaseClient.from('system_settings').select('value').eq('key', 'email_config').maybeSingle()
     const config = settings?.value
     if (!config || !config.enabled) return new Response(JSON.stringify({ message: "Disabled" }), { headers: corsHeaders })
@@ -37,17 +28,19 @@ serve(async (req) => {
 
     if (type === 'test') {
       toEmail = (target_email || config.user).trim()
-      subject = '預約系統：測試信發送成功'
+      subject = '預約系統：發信功能測試成功'
       htmlContent = `<h3>🎉 測試成功！</h3><p>您的發信功能已經可以正常運作。</p><p>時間：${new Date().toLocaleString()}</p>`
     } else {
       const { data: apt } = await supabaseClient.from('appointments').select('*, customers(email, full_name)').eq('id', record_id).single()
       if (!apt) throw new Error("找不到預約資料")
+      
       toEmail = apt.customers.email.trim()
       const details = `<br>日期：${apt.booking_date}<br>時間：${apt.booking_time.slice(0,5)}`
+      
       if (type === 'new') {
         subject = '已收到您的預約申請'
         htmlContent = `您好 ${apt.customers.full_name}，已收到預約，待確認中。${details}`
-      } else if (type === 'update' && apt.status === 'confirmed') {
+      } else if (type === 'update') {
         subject = '您的預約已確認成功'
         htmlContent = `您好 ${apt.customers.full_name}，預約已確認！${details}`
       } else if (type === 'cancel') {
@@ -56,25 +49,31 @@ serve(async (req) => {
       }
     }
 
+    // 2. 使用 SMTPClient 發信 (直接傳入原始字串)
     const client = new SMTPClient({
       connection: {
         hostname: "smtp.gmail.com",
         port: 465,
         tls: true,
-        auth: { username: config.user.trim(), password: config.pass.trim() },
+        auth: { 
+          username: config.user.trim(), 
+          password: config.pass.trim() 
+        },
       },
     })
 
     await client.send({
       from: config.user.trim(),
       to: toEmail,
-      subject: encodeBase64(subject),
+      subject: subject, // 不再手動編碼，讓套件內部處理
       html: `<html><body style="font-family: sans-serif;">${htmlContent}</body></html>`,
     })
 
     await client.close()
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders, status: 200 })
+
   } catch (error: any) {
+    console.error(error)
     return new Response(JSON.stringify({ error: error.message }), { headers: corsHeaders, status: 500 })
   }
 })
