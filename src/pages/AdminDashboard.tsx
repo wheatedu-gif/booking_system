@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { FormDefinition, FormField, Appointment } from '../types';
-import { Plus, Trash2, Save, Settings, Users, Calendar as CalendarIcon, FormInput, Clock, LayoutTemplate, List, ChevronLeft, ChevronRight, Lock, AlertCircle, Download, Send, Edit3, X, TrendingUp, Search, ExternalLink, LayoutDashboard, FileText, StickyNote, History, CheckCircle2, CalendarPlus, BarChart3 } from 'lucide-react';
+import { Plus, Trash2, Save, Settings, Users, Calendar as CalendarIcon, FormInput, Clock, LayoutTemplate, List, ChevronLeft, ChevronRight, Lock, AlertCircle, Download, Send, Edit3, X, TrendingUp, Search, ExternalLink, LayoutDashboard, FileText, StickyNote, History, CheckCircle2, CalendarPlus, KeyRound } from 'lucide-react';
 import { AvailabilitySettings } from './AvailabilitySettings';
 import { WebsiteEditor } from './WebsiteEditor';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO, isToday, isPast, addDays } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO, isToday, isPast } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import { sendNotification } from '../lib/notifications';
 import { useToast } from '../components/Toast';
@@ -25,10 +25,8 @@ export const AdminDashboard: React.FC = () => {
       setAppointments(apts || []);
       const { data: fDefs } = await supabase.from('form_definitions').select('*').order('type');
       setFormDefs(fDefs || []);
-      if (activeTab === 'customers' || activeTab === 'home') {
-        const { data: custs } = await supabase.from('customers').select('*').order('created_at', { ascending: false });
-        setCustomers(custs || []);
-      }
+      const { data: custs } = await supabase.from('customers').select('*').order('created_at', { ascending: false });
+      setCustomers(custs || []);
     } catch (err) { console.error(err); }
     setLoading(false);
   }, [activeTab]);
@@ -89,18 +87,6 @@ const DashboardHome: React.FC<{ appointments: Appointment[], customers: any[] }>
         completed: appointments.filter(a => a.status === 'completed').length,
         newMonth: customers.filter(c => isSameMonth(parseISO(c.created_at), new Date())).length
     };
-
-    // 計算未來七天的預約數
-    const next7Days = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i));
-    const trendData = next7Days.map(day => {
-        const dateStr = format(day, 'yyyy-MM-dd');
-        return {
-            date: format(day, 'MM/dd'),
-            count: appointments.filter(a => a.booking_date === dateStr && a.status !== 'cancelled').length
-        };
-    });
-    const maxCount = Math.max(...trendData.map(d => d.count), 1);
-
     return (
         <div className="space-y-10 animate-in fade-in duration-500">
             <h2 className="text-3xl font-black text-slate-800 tracking-tight">營運儀表板</h2>
@@ -110,40 +96,18 @@ const DashboardHome: React.FC<{ appointments: Appointment[], customers: any[] }>
                 <StatCard icon={<CheckCircle2 />} title="已完成服務" value={stats.completed} color="green" />
                 <StatCard icon={<Users />} title="本月新客" value={stats.newMonth} color="purple" />
             </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* 趨勢圖 */}
-                <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 flex flex-col h-full">
-                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-8 flex items-center gap-2"><BarChart3 size={16}/> 未來七日預約趨勢</h3>
-                    <div className="flex-1 flex items-end justify-between gap-2 px-2 min-h-[150px]">
-                        {trendData.map(d => (
-                            <div key={d.date} className="flex-1 flex flex-col items-center gap-3 group">
-                                <div className="text-[10px] font-bold text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">{d.count} 組</div>
-                                <div 
-                                    style={{ height: `${(d.count / maxCount) * 100}%`, minHeight: d.count > 0 ? '8px' : '2px' }} 
-                                    className={`w-full max-w-[30px] rounded-t-lg transition-all duration-500 ${isToday(parseISO(format(new Date(), 'yyyy-MM-dd'))) ? 'bg-blue-500 shadow-lg shadow-blue-100' : 'bg-slate-300'}`}
-                                ></div>
-                                <div className="text-[10px] font-black text-slate-500 uppercase">{d.date}</div>
+            <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100">
+                <h3 className="text-xl font-bold text-slate-800 mb-6">待處理預約</h3>
+                <div className="space-y-3">
+                    {appointments.filter(a => a.status === 'pending').slice(0, 5).map(apt => (
+                        <div key={apt.id} className="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-white">
+                            <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center font-bold font-mono">{(apt as any).customers?.full_name?.[0]}</div>
+                                <div><div className="font-bold text-slate-800">{(apt as any).customers?.full_name}</div><div className="text-xs text-slate-400">{apt.booking_date} {apt.booking_time.slice(0,5)}</div></div>
                             </div>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 h-full">
-                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">服務狀態分佈</h3>
-                    <div className="h-4 w-full bg-slate-200 rounded-full overflow-hidden flex shadow-inner mb-6">
-                        <div style={{ width: (appointments.filter(a => a.status === 'completed').length / (appointments.length || 1)) * 100 + '%' }} className="bg-green-500 h-full"></div>
-                        <div style={{ width: (appointments.filter(a => a.status === 'confirmed').length / (appointments.length || 1)) * 100 + '%' }} className="bg-blue-500 h-full"></div>
-                        <div style={{ width: (appointments.filter(a => a.status === 'pending').length / (appointments.length || 1)) * 100 + '%' }} className="bg-amber-500 h-full"></div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        {['completed', 'confirmed', 'pending', 'cancelled'].map(s => (
-                            <div key={s} className="flex items-center gap-2 p-3 bg-white rounded-xl border border-white shadow-sm">
-                                <div className={`w-2 h-2 rounded-full ${s === 'completed' ? 'bg-green-500' : s === 'confirmed' ? 'bg-blue-500' : s === 'pending' ? 'bg-amber-500' : 'bg-red-400'}`}></div>
-                                <span className="text-[10px] font-black uppercase text-slate-500">{s}</span>
-                            </div>
-                        ))}
-                    </div>
+                            <span className="text-[10px] font-black uppercase px-3 py-1 rounded-full bg-amber-50 text-amber-600">Pending</span>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
@@ -151,16 +115,15 @@ const DashboardHome: React.FC<{ appointments: Appointment[], customers: any[] }>
 };
 
 const StatCard: React.FC<{ icon: React.ReactNode, title: string, value: number, color: string }> = ({ icon, title, value, color }) => {
-    const cMap: any = { blue: 'bg-blue-50 text-blue-600', amber: 'bg-amber-50 text-amber-600', green: 'bg-green-50 text-green-600', purple: 'bg-purple-50 text-purple-600' };
+    const colorMap: any = { blue: 'bg-blue-50 text-blue-600', amber: 'bg-amber-50 text-amber-600', green: 'bg-green-50 text-green-600', purple: 'bg-purple-50 text-purple-600' };
     return (
         <div className="bg-white p-8 rounded-[2rem] border border-slate-50 shadow-sm flex flex-col gap-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${cMap[color]}`}>{icon}</div>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${colorMap[color]}`}>{icon}</div>
             <div><div className="text-slate-400 text-xs font-bold uppercase tracking-widest">{title}</div><div className="text-4xl font-black text-slate-800 mt-1">{value}</div></div>
         </div>
     );
 };
 
-// --- 預約管理 ---
 const AppointmentManager: React.FC<{ appointments: Appointment[], onStatusChange: (id: string, s: string, reason?: string) => void, onRefresh: () => void, formDefs: FormDefinition[] }> = ({ appointments, onStatusChange, onRefresh, formDefs }) => {
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [searchTerm, setSearchTerm] = useState('');
@@ -168,20 +131,21 @@ const AppointmentManager: React.FC<{ appointments: Appointment[], onStatusChange
   const [showAddModal, setShowAddModal] = useState(false);
   const filtered = appointments.filter(apt => (apt as any).customers?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || (apt as any).customers?.email?.toLowerCase().includes(searchTerm.toLowerCase()) || apt.booking_date.includes(searchTerm));
   
+  const handleExport = () => {
+      const csvRows = [["日期", "時間", "客戶姓名", "狀態", "預約內容"].join(",")];
+      filtered.forEach(a => csvRows.push([a.booking_date, a.booking_time.slice(0,5), (a as any).customers?.full_name, a.status, JSON.stringify(a.booking_data).replace(/,/g,";")].join(",")));
+      const blob = new Blob(["\uFEFF" + csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `預約報表_${format(new Date(), 'yyyyMMdd')}.csv`; link.click();
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-        <div className="relative w-full md:w-96"><input type="text" placeholder="搜尋姓名、Email 或日期..." className="input-field pl-12 py-3 bg-slate-50 border-none rounded-2xl w-full focus:bg-white transition-all shadow-inner" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /><Search size={20} className="absolute left-4 top-3.5 text-slate-300" /></div>
-        <div className="flex gap-3">
-            <button onClick={() => setShowAddModal(true)} className="btn-primary flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold shadow-lg shadow-blue-100 transition-all active:scale-95"><Plus size={18}/> 新增預約</button>
-            <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shrink-0"><button onClick={() => setViewMode('list')} className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>列表</button><button onClick={() => setViewMode('calendar')} className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${viewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>日曆</button></div>
-        </div>
-      </div>
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4"><div className="relative w-full md:w-96"><input type="text" placeholder="搜尋姓名、日期..." className="input-field pl-12 py-3 bg-slate-50 border-none rounded-2xl w-full focus:bg-white shadow-inner" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /><Search size={20} className="absolute left-4 top-3.5 text-slate-300" /></div><div className="flex gap-3"><button onClick={handleExport} className="p-3 bg-slate-50 text-slate-400 rounded-xl hover:text-blue-600 transition-all"><Download size={20}/></button><button onClick={() => setShowAddModal(true)} className="btn-primary flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold shadow-lg shadow-blue-100"><Plus size={18}/> 新增預約</button><div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shrink-0"><button onClick={() => setViewMode('list')} className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>列表</button><button onClick={() => setViewMode('calendar')} className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${viewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>日曆</button></div></div></div>
       {viewMode === 'calendar' ? <AppointmentCalendar appointments={filtered} onStatusChange={onStatusChange} onSelect={setSelectedApt} /> : (
         <div className="overflow-hidden border border-slate-100 rounded-3xl"><table className="w-full text-left border-collapse"><thead className="bg-slate-50/50"><tr><th className="py-5 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest">時間</th><th className="py-5 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest">客戶</th><th className="py-5 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest">狀態</th><th className="py-5 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">動作</th></tr></thead><tbody className="divide-y divide-slate-50">{filtered.map(apt => (
-                <tr key={apt.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => setSelectedApt(apt)}><td className="py-5 px-6"><div className="font-bold text-slate-700">{apt.booking_date}</div><div className="text-blue-500 text-xs font-medium">{apt.booking_time.slice(0,5)}</div></td><td className="py-5 px-6"><div className="font-bold text-slate-700 group-hover:text-blue-600 transition-all flex items-center gap-2">{(apt as any).customers?.full_name} <ExternalLink size={12} className="opacity-0 group-hover:opacity-100" /></div><div className="text-slate-400 text-xs font-medium">{(apt as any).customers?.email}</div></td><td className="py-5 px-6"><span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${apt.status === 'confirmed' ? 'bg-green-100 text-green-800' : apt.status === 'completed' ? 'bg-slate-100 text-slate-600' : apt.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{apt.status === 'confirmed' ? '已確認' : apt.status === 'completed' ? '已完成' : apt.status === 'cancelled' ? '已取消' : '待處理'}</span></td><td className="py-5 px-6 text-right" onClick={e => e.stopPropagation()}><div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all">
+                <tr key={apt.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => setSelectedApt(apt)}><td className="py-5 px-6"><div className="font-bold text-slate-700">{apt.booking_date}</div><div className="text-blue-500 text-xs font-medium">{apt.booking_time.slice(0,5)}</div></td><td className="py-5 px-6"><div className="font-bold text-slate-700 group-hover:text-blue-600 transition-all flex items-center gap-2">{(apt as any).customers?.full_name} <ExternalLink size={12} className="opacity-0 group-hover:opacity-100" /></div><div className="text-slate-400 text-xs font-medium">{(apt as any).customers?.email}</div></td><td className="py-5 px-6"><span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${apt.status === 'confirmed' ? 'bg-green-100 text-green-800' : apt.status === 'completed' ? 'bg-slate-100 text-slate-600' : apt.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{apt.status}</span></td><td className="py-5 px-6 text-right" onClick={e => e.stopPropagation()}><div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all">
                     {apt.status === 'pending' && <button onClick={() => onStatusChange(apt.id, 'confirmed')} className="bg-green-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-sm shadow-green-100 hover:bg-green-600">確認</button>}
-                    {apt.status === 'confirmed' && isPast(parseISO(apt.booking_date)) && <button onClick={() => onStatusChange(apt.id, 'completed')} className="bg-blue-600 text-white px-4 py-1.5 rounded-xl text-xs font-bold hover:bg-blue-700">完成</button>}
+                    {apt.status === 'confirmed' && <button onClick={() => onStatusChange(apt.id, 'completed')} className="bg-blue-600 text-white px-4 py-1.5 rounded-xl text-xs font-bold hover:bg-blue-700">完成</button>}
                     {apt.status !== 'cancelled' && apt.status !== 'completed' && <button onClick={() => { const r = window.prompt('原因'); if(r!==null) onStatusChange(apt.id, 'cancelled', r); }} className="text-slate-400 hover:text-red-500 font-bold text-xs">取消</button>}
                 </div></td></tr>))}</tbody></table></div>
       )}
@@ -200,9 +164,7 @@ const ManualBookingModal: React.FC<{ onClose: () => void, onRefresh: () => void,
     const [dynamicData, setDynamicData] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState(false);
     const { showToast } = useToast();
-
     const bookingFormDef = formDefs.find(d => d.type === 'booking_form');
-
     useEffect(() => { supabase.from('customers').select('id, full_name, email').then(({ data }) => setCustomers(data || [])); }, []);
     useEffect(() => {
         if (!date) return;
@@ -211,32 +173,23 @@ const ManualBookingModal: React.FC<{ onClose: () => void, onRefresh: () => void,
             const { data: business } = await supabase.from('business_hours').select('*');
             const { data: occupied } = await supabase.from('appointments').select('booking_time').eq('booking_date', date).neq('status', 'cancelled');
             if (!rules?.value || !business) return;
-            const r = rules.value; const day = new Date(date).getDay(); const hours = business.find(b => b.day_of_week === day);
+            const r = rules.value; const hours = business.find(b => b.day_of_week === new Date(date).getDay());
             if (!hours?.is_open) { setAvailableSlots([]); return; }
-            const slots: string[] = []; let curr = parseT(hours.start_time); const end = parseT(hours.end_time); const step = r.time_slot_minutes || 60; const capacity = r.max_concurrent_bookings || 1;
+            const slots: string[] = []; let curr = parseT(hours.start_time); const end = parseT(hours.end_time);
+            const step = r.time_slot_minutes || 60; const capacity = r.max_concurrent_bookings || 1;
             while (curr < end) { const count = occupied?.filter(o => parseT(o.booking_time.slice(0,5)) === curr).length || 0; if (count < capacity) slots.push(formatT(curr)); curr += step; }
             setAvailableSlots(slots);
         };
         fetchAvailability();
     }, [date]);
-
     const parseT = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
     const formatT = (m: number) => { const hh = Math.floor(m / 60).toString().padStart(2, '0'); const mm = (m % 60).toString().padStart(2, '0'); return `${hh}:${mm}`; };
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault(); if (!selectedCustomer || !time) return; setLoading(true);
-        const { error } = await supabase.from('appointments').insert([{ 
-            customer_id: selectedCustomer, 
-            booking_date: date, 
-            booking_time: time, 
-            status: 'confirmed', 
-            source: 'manual',
-            booking_data: dynamicData
-        }]);
+        const { error } = await supabase.from('appointments').insert([{ customer_id: selectedCustomer, booking_date: date, booking_time: time, status: 'confirmed', source: 'manual', booking_data: dynamicData }]);
         if (error) showToast('建立失敗', 'error'); else { showToast('預約已建立'); onRefresh(); onClose(); }
         setLoading(false);
     };
-
     return (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-[3rem] w-full max-w-xl max-h-[90vh] overflow-y-auto p-10 shadow-2xl animate-in zoom-in-95 duration-200"><div className="flex justify-between items-center mb-8"><h3 className="text-2xl font-black text-slate-800">手動建立預約</h3><button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full"><X /></button></div><form onSubmit={handleSubmit} className="space-y-6"><div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">1. 選擇會員</label><select className="input-field rounded-2xl py-4 bg-slate-50 border-none" value={selectedCustomer} onChange={e => setSelectedCustomer(e.target.value)} required><option value="">請選擇客戶...</option>{customers.map(c => <option key={c.id} value={c.id}>{c.full_name} ({c.email})</option>)}</select></div><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">2. 日期</label><input type="date" className="input-field rounded-2xl py-4 bg-slate-50 border-none shadow-inner" value={date} onChange={e => setDate(e.target.value)} required /></div><div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">3. 時段</label><select className="input-field rounded-2xl py-4 bg-slate-50 border-none shadow-inner" value={time} onChange={e => setTime(e.target.value)} required disabled={availableSlots.length === 0}><option value="">請選擇時段...</option>{availableSlots.map(s => <option key={s} value={s}>{s}</option>)}</select></div></div><div className="pt-4 border-t border-slate-50"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 block ml-1">4. 填寫預約詳細資料</label><div className="space-y-4">{bookingFormDef?.fields.filter(f => !f.isSystem).map(field => (
                         <div key={field.id}><label className="text-xs font-bold text-slate-600 mb-2 block">{field.label}</label>{field.type === 'select' ? (<select className="input-field bg-slate-50 border-none rounded-xl" onChange={e => setDynamicData({...dynamicData, [field.label]: e.target.value})}><option value="">請選擇...</option>{field.options?.map(o => <option key={o} value={o}>{o}</option>)}</select>) : (<input type={field.type} className="input-field bg-slate-50 border-none rounded-xl" onChange={e => setDynamicData({...dynamicData, [field.label]: e.target.value})} />)}</div>
                     ))}</div></div><button type="submit" disabled={loading || !time} className="w-full btn-primary py-5 rounded-2xl font-black shadow-xl shadow-blue-200">建立並直接確認</button></form></div></div>);
@@ -292,12 +245,9 @@ const CustomerManager: React.FC<{ customers: any[], onRefresh: () => void, allAp
   const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const { showToast } = useToast();
-  
   const filtered = customers.filter(c => c.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || c.email?.toLowerCase().includes(searchTerm.toLowerCase()) || c.phone?.includes(searchTerm));
-
   const handleUpdate = async (e: React.FormEvent) => { e.preventDefault(); const { error } = await supabase.from('customers').update({ full_name: editingCustomer.full_name, phone: editingCustomer.phone, email: editingCustomer.email }).eq('id', editingCustomer.id); if (error) showToast('更新失敗', 'error'); else { showToast('資料已更新'); setEditingCustomer(null); onRefresh(); } };
   const handleDelete = async (id: string) => { if (!window.confirm('確定要刪除此會員嗎？相關預約也會一併刪除。')) return; const { error } = await supabase.from('customers').delete().eq('id', id); if (error) showToast('刪除失敗', 'error'); else { showToast('會員已刪除'); onRefresh(); } };
-  
   return (
     <div className="space-y-8 relative animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
