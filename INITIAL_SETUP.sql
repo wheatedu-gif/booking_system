@@ -1,5 +1,5 @@
 -- =========================================================
--- 智慧預約系統 - 終極整合初始化腳本 (V7 完整防護版)
+-- 智慧預約系統 - 終極整合初始化腳本 (V8 郵件範本自訂版)
 -- =========================================================
 
 -- 0. 環境與擴充功能
@@ -21,42 +21,11 @@ DROP TABLE IF EXISTS page_content CASCADE;
 DROP TABLE IF EXISTS customers CASCADE;
 DROP TABLE IF EXISTS profiles CASCADE;
 
--- 2. 建立資料表
-
-CREATE TABLE profiles (
-  id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-  email TEXT NOT NULL,
-  full_name TEXT,
-  role TEXT DEFAULT 'admin',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE customers (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  full_name TEXT NOT NULL,
-  phone TEXT,
-  custom_data JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE appointments (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_id UUID REFERENCES customers(id) ON DELETE CASCADE,
-  booking_date DATE NOT NULL,
-  booking_time TIME NOT NULL,
-  status TEXT DEFAULT 'pending', 
-  booking_data JSONB DEFAULT '{}'::jsonb,
-  cancellation_reason TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
+-- 2. 建立資料表 (保持原結構)
+CREATE TABLE profiles (id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY, email TEXT NOT NULL, full_name TEXT, role TEXT DEFAULT 'admin', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE customers (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, full_name TEXT NOT NULL, phone TEXT, custom_data JSONB DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE appointments (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), customer_id UUID REFERENCES customers(id) ON DELETE CASCADE, booking_date DATE NOT NULL, booking_time TIME NOT NULL, status TEXT DEFAULT 'pending', booking_data JSONB DEFAULT '{}'::jsonb, cancellation_reason TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());
 CREATE UNIQUE INDEX idx_prevent_double_booking ON appointments (booking_date, booking_time) WHERE (status != 'cancelled');
-
 CREATE TABLE page_content (section_key TEXT PRIMARY KEY, content JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW());
 CREATE TABLE form_definitions (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), type TEXT NOT NULL, fields JSONB NOT NULL DEFAULT '[]'::jsonb, updated_at TIMESTAMPTZ DEFAULT NOW());
 CREATE TABLE business_hours (day_of_week INT PRIMARY KEY CHECK (day_of_week BETWEEN 0 AND 6), is_open BOOLEAN DEFAULT true, start_time TIME DEFAULT '09:00', end_time TIME DEFAULT '18:00', break_start TIME DEFAULT '12:00', break_end TIME DEFAULT '13:00');
@@ -90,68 +59,62 @@ CREATE POLICY "Public View Appointments" ON appointments FOR SELECT USING (true)
 CREATE POLICY "Public Create Appointment" ON appointments FOR INSERT WITH CHECK (true);
 
 -- 4. 後端函數 (RPC)
-
--- [RPC] 客戶註冊
 CREATE OR REPLACE FUNCTION register_customer(p_email TEXT, p_password TEXT, p_full_name TEXT, p_custom_data JSONB DEFAULT '{}'::jsonb) 
 RETURNS jsonb AS $$
 DECLARE new_id UUID;
 BEGIN
-  IF EXISTS (SELECT 1 FROM customers WHERE email = p_email) THEN
-    RETURN jsonb_build_object('success', false, 'message', 'Email 已被註冊');
-  END IF;
-  INSERT INTO customers (email, password_hash, full_name, custom_data)
-  VALUES (p_email, crypt(p_password, gen_salt('bf')), p_full_name, p_custom_data)
-  RETURNING id INTO new_id;
+  IF EXISTS (SELECT 1 FROM customers WHERE email = p_email) THEN RETURN jsonb_build_object('success', false, 'message', 'Email 已被註冊'); END IF;
+  INSERT INTO customers (email, password_hash, full_name, custom_data) VALUES (p_email, crypt(p_password, gen_salt('bf')), p_full_name, p_custom_data) RETURNING id INTO new_id;
   RETURN jsonb_build_object('success', true, 'data', jsonb_build_object('id', new_id, 'email', p_email, 'full_name', p_full_name));
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- [RPC] 客戶登入
 CREATE OR REPLACE FUNCTION login_customer(p_email TEXT, p_password TEXT) 
 RETURNS jsonb AS $$
 DECLARE target_customer RECORD;
 BEGIN
   SELECT * INTO target_customer FROM customers WHERE email = p_email;
-  IF target_customer IS NULL OR target_customer.password_hash != crypt(p_password, target_customer.password_hash) THEN
-    RETURN jsonb_build_object('success', false, 'message', '帳號或密碼錯誤');
-  END IF;
+  IF target_customer IS NULL OR target_customer.password_hash != crypt(p_password, target_customer.password_hash) THEN RETURN jsonb_build_object('success', false, 'message', '帳號或密碼錯誤'); END IF;
   RETURN jsonb_build_object('success', true, 'data', jsonb_build_object('id', target_customer.id, 'email', target_customer.email, 'full_name', target_customer.full_name, 'custom_data', target_customer.custom_data));
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- [RPC] 修改密碼
 CREATE OR REPLACE FUNCTION update_customer_password(p_customer_id UUID, p_old_password TEXT, p_new_password TEXT)
 RETURNS jsonb AS $$
 DECLARE target_customer RECORD;
 BEGIN
   SELECT * INTO target_customer FROM customers WHERE id = p_customer_id;
-  IF target_customer.password_hash != crypt(p_old_password, target_customer.password_hash) THEN
-    RETURN jsonb_build_object('success', false, 'message', '舊密碼驗證失敗');
-  END IF;
+  IF target_customer.password_hash != crypt(p_old_password, target_customer.password_hash) THEN RETURN jsonb_build_object('success', false, 'message', '舊密碼驗證失敗'); END IF;
   UPDATE customers SET password_hash = crypt(p_new_password, gen_salt('bf')) WHERE id = p_customer_id;
   RETURN jsonb_build_object('success', true);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- [Trigger] 管理員帳號自動同步
 CREATE OR REPLACE FUNCTION handle_new_admin_user() RETURNS trigger AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name, role)
-  VALUES (new.id, new.email, COALESCE(new.raw_user_meta_data->>'full_name', 'Administrator'), 'admin')
-  ON CONFLICT (id) DO UPDATE SET role = 'admin';
+  INSERT INTO public.profiles (id, email, full_name, role) VALUES (new.id, new.email, COALESCE(new.raw_user_meta_data->>'full_name', 'Administrator'), 'admin') ON CONFLICT (id) DO UPDATE SET role = 'admin';
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE PROCEDURE handle_new_admin_user();
 
--- 5. 初始化資料 (省略部分重複內容)
+-- 5. 初始化資料 (含 Email 範本)
 INSERT INTO form_definitions (type, fields) VALUES 
 ('customer_profile', '[{"id": "sys_name", "name": "full_name", "label": "姓名", "type": "text", "required": true, "isSystem": true}, {"id": "sys_email", "name": "email", "label": "電子郵件", "type": "text", "required": true, "isSystem": true}, {"id": "sys_phone", "name": "phone", "label": "聯絡電話", "type": "tel", "required": false, "isSystem": true}]'::jsonb),
 ('booking_form', '[{"id": "sys_date", "name": "date", "label": "預約日期", "type": "date", "required": true, "isSystem": true}, {"id": "sys_time", "name": "time", "label": "預約時間", "type": "text", "required": true, "isSystem": true}]'::jsonb);
 
 INSERT INTO business_hours (day_of_week, is_open, start_time, end_time) VALUES (0, false, '09:00', '18:00'), (1, true, '09:00', '18:00'), (2, true, '09:00', '18:00'), (3, true, '09:00', '18:00'), (4, true, '09:00', '18:00'), (5, true, '09:00', '18:00'), (6, false, '09:00', '18:00');
-INSERT INTO system_settings (key, value) VALUES ('booking_rules', '{"time_slot_minutes": 60, "booking_window_days": 30}'::jsonb), ('email_config', '{"enabled": false, "user": "", "pass": "", "from_name": "預約系統"}'::jsonb);
+
+-- 初始規則與 Email 範本
+INSERT INTO system_settings (key, value) VALUES 
+('booking_rules', '{"time_slot_minutes": 60, "booking_window_days": 30}'::jsonb),
+('email_config', '{"enabled": false, "user": "", "pass": "", "from_name": "預約系統"}'::jsonb),
+('email_templates', '{
+  "new_booking": { "subject": "已收到您的預約申請", "body": "您好 {name}，我們已收到您的預約申請，目前正在處理中。" },
+  "confirmed": { "subject": "您的預約已確認成功", "body": "您好 {name}，您的預約已確認成功，期待您的光臨！" },
+  "cancelled": { "subject": "預約取消通知", "body": "您好 {name}，您的預約已被取消。原因：{reason}" }
+}'::jsonb);
 
 INSERT INTO page_content (section_key, content) VALUES ('landing_page', $$
 {
