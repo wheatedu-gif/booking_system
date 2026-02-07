@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { FormDefinition, FormField, Appointment } from '../types';
 import { Plus, Trash2, Save, Settings, Users, Calendar as CalendarIcon, FormInput, Clock, LayoutTemplate, List, ChevronLeft, ChevronRight, Lock, AlertCircle, Download, Send } from 'lucide-react';
@@ -46,6 +46,9 @@ export const AdminDashboard: React.FC = () => {
     
     if (error) alert('更新失敗: ' + error.message);
     else {
+      // 關鍵：觸發 Email 通知
+      // status 為 'confirmed' 時，type 為 'update'
+      // status 為 'cancelled' 時，type 為 'cancel'
       await sendNotification(id, status === 'cancelled' ? 'cancel' : 'update');
       fetchData();
     }
@@ -55,22 +58,22 @@ export const AdminDashboard: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex flex-col md:flex-row gap-8">
         <div className="w-full md:w-64 space-y-2 shrink-0">
-          <button onClick={() => setActiveTab('appointments')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'appointments' ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'hover:bg-slate-200 text-slate-600'}`}>
+          <button onClick={() => setActiveTab('appointments')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'appointments' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-200 text-slate-600'}`}>
             <CalendarIcon size={20} /><span className="font-medium">預約管理</span>
           </button>
-          <button onClick={() => setActiveTab('availability')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'availability' ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'hover:bg-slate-200 text-slate-600'}`}>
+          <button onClick={() => setActiveTab('availability')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'availability' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-200 text-slate-600'}`}>
             <Clock size={20} /><span className="font-medium">預約時段設定</span>
           </button>
-          <button onClick={() => setActiveTab('cms')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'cms' ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'hover:bg-slate-200 text-slate-600'}`}>
+          <button onClick={() => setActiveTab('cms')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'cms' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-200 text-slate-600'}`}>
             <LayoutTemplate size={20} /><span className="font-medium">網站內容編輯</span>
           </button>
-          <button onClick={() => setActiveTab('forms')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'forms' ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'hover:bg-slate-200 text-slate-600'}`}>
+          <button onClick={() => setActiveTab('forms')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'forms' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-200 text-slate-600'}`}>
             <FormInput size={20} /><span className="font-medium">表單欄位設定</span>
           </button>
-          <button onClick={() => setActiveTab('customers')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'customers' ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'hover:bg-slate-200 text-slate-600'}`}>
+          <button onClick={() => setActiveTab('customers')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'customers' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-200 text-slate-600'}`}>
             <Users size={20} /><span className="font-medium">客戶管理</span>
           </button>
-          <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'hover:bg-slate-200 text-slate-600'}`}>
+          <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-200 text-slate-600'}`}>
             <Settings size={20} /><span className="font-medium">系統與 Email 設定</span>
           </button>
         </div>
@@ -143,21 +146,21 @@ const AppointmentManager: React.FC<{ appointments: Appointment[], onStatusChange
         <div className="overflow-hidden border border-slate-100 rounded-2xl">
             <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50/50">
-                <tr><th className="py-4 px-6 text-xs font-bold text-slate-400 uppercase">預約時間</th><th className="py-4 px-6 text-xs font-bold text-slate-400 uppercase">客戶資料</th><th className="py-4 px-6 text-xs font-bold text-slate-400 uppercase">狀態</th><th className="py-4 px-6 text-xs font-bold text-slate-400 uppercase">動作</th></tr>
+                <tr><th className="py-4 px-6 text-xs font-bold text-slate-400 uppercase">時間</th><th className="py-4 px-6 text-xs font-bold text-slate-400 uppercase">客戶</th><th className="py-4 px-6 text-xs font-bold text-slate-400 uppercase">狀態</th><th className="py-4 px-6 text-xs font-bold text-slate-400 uppercase">動作</th></tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody>
                 {appointments.map(apt => (
-                <tr key={apt.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-5 px-6"><div className="font-bold text-slate-700">{apt.booking_date}</div><div className="text-blue-500 text-xs font-medium">{apt.booking_time.slice(0,5)}</div></td>
+                <tr key={apt.id} className="hover:bg-slate-50 transition-colors border-b last:border-0 border-slate-50">
+                    <td className="py-5 px-6"><div className="font-bold text-slate-700">{apt.booking_date}</div><div className="text-blue-500 text-xs">{apt.booking_time.slice(0,5)}</div></td>
                     <td className="py-5 px-6"><div className="font-bold text-slate-700">{(apt as any).customers?.full_name}</div><div className="text-slate-400 text-xs">{(apt as any).customers?.email}</div></td>
                     <td className="py-5 px-6">
                         <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${apt.status === 'confirmed' ? 'bg-green-100 text-green-700' : apt.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{apt.status === 'confirmed' ? '已確認' : apt.status === 'cancelled' ? '已取消' : '待處理'}</span>
-                        {apt.cancellation_reason && <div className="text-[10px] text-red-400 mt-1 italic">「{apt.cancellation_reason}」</div>}
+                        {apt.cancellation_reason && <div className="text-[10px] text-red-400 mt-1 italic">{apt.cancellation_reason}</div>}
                     </td>
                     <td className="py-5 px-6">
-                    <div className="flex gap-3">
-                        {apt.status === 'pending' && <button onClick={() => onStatusChange(apt.id, 'confirmed')} className="text-white bg-green-500 hover:bg-green-600 px-3 py-1 rounded-lg text-xs font-bold shadow-sm shadow-green-100">確認</button>}
-                        {apt.status !== 'cancelled' && <button onClick={() => { const r = window.prompt('請輸入取消原因'); if(r !== null) onStatusChange(apt.id, 'cancelled', r); }} className="text-slate-400 hover:text-red-500 font-medium text-xs">取消</button>}
+                    <div className="flex gap-2">
+                        {apt.status === 'pending' && <button onClick={() => onStatusChange(apt.id, 'confirmed')} className="bg-green-500 text-white px-3 py-1 rounded-lg text-xs font-bold hover:bg-green-600 transition-colors">確認</button>}
+                        {apt.status !== 'cancelled' && <button onClick={() => { const r = window.prompt('取消原因'); if(r !== null) onStatusChange(apt.id, 'cancelled', r); }} className="text-red-500 hover:underline text-xs">取消</button>}
                     </div>
                     </td>
                 </tr>
@@ -187,15 +190,14 @@ const FormManager: React.FC<{ formDefs: FormDefinition[], onRefresh: () => void 
           {formDefs.map(def => (
             <div key={def.id} className="p-8 bg-slate-50 rounded-3xl border border-slate-100 hover:border-blue-200 transition-all group">
               <h3 className="font-bold text-lg text-slate-700 mb-3 flex items-center gap-3">{def.type === 'customer_profile' ? <Users /> : <CalendarIcon />}{def.type === 'customer_profile' ? '客戶註冊欄位' : '預約填寫欄位'}</h3>
-              <p className="text-sm text-slate-400 mb-6 leading-relaxed">設定您的客戶在註冊或預約時需要提供哪些資訊。您可以修改預設標籤或增加新的自定義項。</p>
-              <button onClick={() => setEditingDef(def)} className="w-full bg-white text-blue-600 border-2 border-blue-50 px-4 py-3 rounded-2xl text-sm font-bold hover:bg-blue-600 hover:text-white transition-all shadow-sm">編輯所有欄位</button>
+              <button onClick={() => setEditingDef(def)} className="w-full bg-white text-blue-600 border-2 border-blue-50 px-4 py-3 rounded-2xl text-sm font-bold hover:bg-blue-600 hover:text-white transition-all">編輯所有欄位</button>
             </div>
           ))}
         </div>
       ) : (
         <div className="space-y-6">
           <div className="flex justify-between items-center bg-blue-600 p-6 rounded-2xl text-white shadow-lg shadow-blue-100">
-            <div><h3 className="font-bold text-lg">{editingDef.type === 'customer_profile' ? '正在編輯：客戶資料' : '正在編輯：預約表單'}</h3><p className="text-xs text-blue-100 mt-1 opacity-80">小技巧：點擊標籤文字即可修改顯示名稱。</p></div>
+            <div><h3 className="font-bold text-lg">{editingDef.type === 'customer_profile' ? '正在編輯：客戶資料' : '正在編輯：預約表單'}</h3><p className="text-xs text-blue-100 mt-1 opacity-80">帶有 🔒 的為系統核心欄位，僅能修改顯示名稱。</p></div>
             <div className="flex gap-3"><button onClick={() => setEditingDef(null)} className="px-4 py-2 text-white hover:bg-white/10 rounded-xl font-bold">取消</button><button onClick={handleSave} className="bg-white text-blue-600 px-8 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-50 transition-all shadow-md"><Save size={18} /> 儲存變更</button></div>
           </div>
           <div className="grid gap-4">
@@ -209,7 +211,7 @@ const FormManager: React.FC<{ formDefs: FormDefinition[], onRefresh: () => void 
               </div>
             ))}
           </div>
-          <button onClick={() => { const newField: FormField = { id: Math.random().toString(36).substr(2, 9), name: `field_${Date.now()}`, label: '新增欄位', type: 'text', required: false }; setEditingDef({ ...editingDef, fields: [...editingDef.fields, newField] }); }} className="w-full py-6 border-2 border-dashed border-slate-200 rounded-3xl text-slate-400 font-bold flex items-center justify-center gap-3 hover:bg-blue-50 hover:text-blue-500 hover:border-blue-200 transition-all group"><Plus size={24} className="group-hover:scale-110 transition-transform" /> 增加更多自定義填寫項</button>
+          <button onClick={() => { const newField: FormField = { id: Math.random().toString(36).substr(2, 9), name: `field_${Date.now()}`, label: '新增欄位', type: 'text', required: false }; setEditingDef({ ...editingDef, fields: [...editingDef.fields, newField] }); }} className="w-full py-6 border-2 border-dashed border-slate-200 rounded-3xl text-slate-400 font-bold flex items-center justify-center gap-3 hover:bg-blue-50 hover:text-blue-500 hover:border-blue-200 transition-all"><Plus size={24} /> 增加自定義填寫項</button>
         </div>
       )}
     </div>
@@ -237,22 +239,18 @@ const SettingsManager: React.FC = () => {
     }
     setTesting(true);
     try {
-        // 先儲存設定，確保 Edge Function 讀到最新的
         await supabase.from('system_settings').upsert({ key: 'email_config', value: config });
-        
         const { data, error } = await supabase.functions.invoke('notify', {
-            body: { type: 'test', target_email: config.user } // 寄給自己測試
+            body: { type: 'test', target_email: config.user }
         });
-
-        if (error) throw error;
-        if (data?.error) throw new Error(data.error);
-        
-        alert(`測試信已發送至 ${config.user}！\n請檢查您的收件匣 (或垃圾郵件)。`);
-    } catch (err: any) {
-        alert('測試失敗：' + err.message);
-    } finally {
-        setTesting(false);
-    }
+        if (error) {
+            let msg = error.message;
+            try { const body = await (error as any).context.json(); if (body.error) msg = body.error; } catch(e){}
+            throw new Error(msg);
+        }
+        alert(`測試信已發送至 ${config.user}！`);
+    } catch (err: any) { alert('測試失敗：' + err.message); }
+    finally { setTesting(false); }
   };
 
   return (
@@ -263,17 +261,12 @@ const SettingsManager: React.FC = () => {
             <input type="checkbox" className="w-6 h-6 text-blue-600 rounded-lg" checked={config.enabled} onChange={e => setConfig({...config, enabled: e.target.checked})} />
             <div className="flex-1"><div className="font-bold text-slate-700">啟用自動 Email 發送</div><div className="text-xs text-slate-400">當預約提交、確認或取消時自動通知</div></div>
         </label>
-        <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">寄件者顯示名稱</label><input className="input-field bg-white" placeholder="例如：智慧預約客服中心" value={config.from_name} onChange={e => setConfig({...config, from_name: e.target.value})} /></div>
-        <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Gmail 帳號 (Email)</label><input className="input-field bg-white" placeholder="xxx@gmail.com" value={config.user} onChange={e => setConfig({...config, user: e.target.value})} /></div>
-        <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Gmail 應用程式密碼</label><input type="password" placeholder="16 位數應用程式密碼" className="input-field bg-white" value={config.pass} onChange={e => setConfig({...config, pass: e.target.value})} /></div>
-        
+        <div><label className="block text-xs font-bold text-slate-400 uppercase mb-2 ml-1">寄件者名稱</label><input className="input-field bg-white" value={config.from_name} onChange={e => setConfig({...config, from_name: e.target.value})} /></div>
+        <div><label className="block text-xs font-bold text-slate-400 uppercase mb-2 ml-1">Gmail 帳號</label><input className="input-field bg-white" value={config.user} onChange={e => setConfig({...config, user: e.target.value})} /></div>
+        <div><label className="block text-xs font-bold text-slate-400 uppercase mb-2 ml-1">應用程式密碼</label><input type="password" placeholder="16 位密碼" className="input-field bg-white" value={config.pass} onChange={e => setConfig({...config, pass: e.target.value})} /></div>
         <div className="flex gap-3 pt-2">
-            <button onClick={handleTestEmail} disabled={testing} className="flex-1 bg-white text-slate-600 border-2 border-slate-200 py-4 rounded-2xl font-bold hover:bg-slate-50 hover:text-blue-600 flex items-center justify-center gap-2 transition-all">
-                {testing ? '發送中...' : <><Send size={18} /> 發送測試信</>}
-            </button>
-            <button onClick={saveSettings} className="flex-1 btn-primary py-4 font-bold shadow-lg shadow-blue-200 rounded-2xl text-lg flex items-center justify-center gap-2">
-                <Save size={18} /> 儲存設定
-            </button>
+            <button onClick={handleTestEmail} disabled={testing} className="flex-1 bg-white text-slate-600 border-2 border-slate-200 py-4 rounded-2xl font-bold hover:text-blue-600 flex items-center justify-center gap-2 transition-all">{testing ? '發送中...' : <><Send size={18} /> 測試發信</>}</button>
+            <button onClick={saveSettings} className="flex-1 btn-primary py-4 font-bold rounded-2xl text-lg flex items-center justify-center gap-2"><Save size={18} /> 儲存設定</button>
         </div>
       </div>
     </div>
@@ -283,40 +276,25 @@ const SettingsManager: React.FC = () => {
 const CustomerManager: React.FC = () => {
   const [customers, setCustomers] = useState<any[]>([]);
   useEffect(() => { supabase.from('customers').select('*').order('created_at', { ascending: false }).then(({ data }) => setCustomers(data || [])); }, []);
-  
   const downloadCSV = () => {
     if (!customers.length) return;
-    const headers = ['姓名', 'Email', '電話', '註冊時間'];
-    const csvContent = [
-      headers.join(','),
-      ...customers.map(c => [c.full_name, c.email, c.phone || '', new Date(c.created_at).toLocaleDateString()].join(','))
-    ].join('\n');
-    
+    const csvContent = "姓名,Email,電話,註冊時間\n" + customers.map(c => [c.full_name, c.email, c.phone || '', new Date(c.created_at).toLocaleDateString()].join(',')).join('\n');
     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `客戶清單_${format(new Date(), 'yyyyMMdd')}.csv`);
+    link.href = URL.createObjectURL(blob);
+    link.download = `客戶清單_${format(new Date(), 'yyyyMMdd')}.csv`;
     link.click();
   };
-
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3"><Users className="text-blue-600" /> 會員資料管理</h2>
-        <button onClick={downloadCSV} className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 rounded-xl transition-all font-bold text-sm border border-slate-200"><Download size={18}/> 匯出 CSV 名單</button>
-      </div>
+      <div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3"><Users className="text-blue-600" /> 會員資料管理</h2><button onClick={downloadCSV} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm border border-slate-200 hover:bg-blue-50 hover:text-blue-600 transition-all"><Download size={18}/> 匯出 CSV</button></div>
       <div className="grid gap-4">
         {customers.map(c => (
-          <div key={c.id} className="p-6 bg-slate-50/50 rounded-3xl flex justify-between items-center border border-slate-100 hover:bg-white hover:shadow-xl hover:shadow-slate-100 transition-all group">
-            <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center font-bold text-xl">{c.full_name[0]}</div>
-                <div><div className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{c.full_name}</div><div className="text-xs text-slate-400 font-medium">{c.email} {c.phone && `| ${c.phone}`}</div></div>
-            </div>
-            <div className="text-right"><div className="text-xs text-slate-400 font-bold uppercase tracking-tighter">註冊日期</div><div className="text-sm text-slate-500 font-medium">{new Date(c.created_at).toLocaleDateString()}</div></div>
+          <div key={c.id} className="p-6 bg-slate-50/50 rounded-3xl flex justify-between items-center border border-slate-100 hover:bg-white transition-all group">
+            <div className="flex items-center gap-4"><div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center font-bold text-xl">{c.full_name[0]}</div><div><div className="font-bold text-slate-800">{c.full_name}</div><div className="text-xs text-slate-400 font-medium">{c.email} | {c.phone || '無電話'}</div></div></div>
+            <div className="text-right"><div className="text-xs text-slate-400 font-bold uppercase">註冊日期</div><div className="text-sm text-slate-500 font-medium">{new Date(c.created_at).toLocaleDateString()}</div></div>
           </div>
         ))}
-        {customers.length === 0 && <div className="p-20 text-center text-slate-300 font-bold italic">目前尚無註冊會員資料</div>}
       </div>
     </div>
   );

@@ -1,8 +1,3 @@
-// ---------------------------------------------------------
-// Supabase Edge Function: notify (標準 Denomailer 版)
-// 解決中文亂碼並支援所有預約通知與測試模式
-// ---------------------------------------------------------
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts"
@@ -10,6 +5,16 @@ import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts"
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+function encodeBase64(str: string): string {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  let binary = "";
+  for (let i = 0; i < data.length; i++) {
+    binary += String.fromCharCode(data[i]);
+  }
+  return `=?UTF-8?B?${btoa(binary)}?=`;
 }
 
 serve(async (req) => {
@@ -22,7 +27,6 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // 1. 讀取設定
     const { data: settings } = await supabaseClient.from('system_settings').select('value').eq('key', 'email_config').maybeSingle()
     const config = settings?.value
     if (!config || !config.enabled) return new Response(JSON.stringify({ message: "Disabled" }), { headers: corsHeaders })
@@ -32,29 +36,23 @@ serve(async (req) => {
     let htmlContent = ''
 
     if (type === 'test') {
-      toEmail = target_email || config.user
-      subject = '預約系統：發信功能測試成功'
-      htmlContent = `<h3>🎉 測試信發送成功！</h3><p>這代表您的 Gmail SMTP 設定運作正常。</p><p>發送時間：${new Date().toLocaleString()}</p>`
+      toEmail = (target_email || config.user).trim()
+      subject = '預約系統：測試信發送成功'
+      htmlContent = `<h3>🎉 測試成功！</h3><p>您的發信功能已經可以正常運作。</p><p>時間：${new Date().toLocaleString()}</p>`
     } else {
-      // 2. 讀取預約與客戶資料
-      const { data: appointment } = await supabaseClient.from('appointments').select('*, customers(email, full_name)').eq('id', record_id).single()
-      if (!appointment) throw new Error("Appointment not found")
-      
-      const customer = appointment.customers
-      toEmail = customer.email
-      const info = `<br><hr><br><b>預約詳情：</b><br>日期：${appointment.booking_date}<br>時間：${appointment.booking_time.slice(0,5)}`
-
+      const { data: apt } = await supabaseClient.from('appointments').select('*, customers(email, full_name)').eq('id', record_id).single()
+      if (!apt) throw new Error("找不到預約資料")
+      toEmail = apt.customers.email.trim()
+      const details = `<br>日期：${apt.booking_date}<br>時間：${apt.booking_time.slice(0,5)}`
       if (type === 'new') {
-          subject = '預約通知：已收到您的預約申請'
-          htmlContent = `您好 ${customer.full_name}，<br><br>我們已收到您的預約申請，目前狀態為<b>待處理</b>。<br>${info}`
-      } else if (type === 'update' && appointment.status === 'confirmed') {
-          subject = '預約確認：您的預約已成功'
-          htmlContent = `您好 ${customer.full_name}，<br><br>您的預約已<b>確認成功</b>，期待您的光臨！<br>${info}`
+        subject = '已收到您的預約申請'
+        htmlContent = `您好 ${apt.customers.full_name}，已收到預約，待確認中。${details}`
+      } else if (type === 'update' && apt.status === 'confirmed') {
+        subject = '您的預約已確認成功'
+        htmlContent = `您好 ${apt.customers.full_name}，預約已確認！${details}`
       } else if (type === 'cancel') {
-          subject = '預約取消通知'
-          htmlContent = `您好 ${customer.full_name}，<br><br>您的預約已被取消。<br>原因：${appointment.cancellation_reason || '無'}<br>${info}`
-      } else {
-          return new Response(JSON.stringify({ message: "Skipped" }), { headers: corsHeaders })
+        subject = '預約取消通知'
+        htmlContent = `您好 ${apt.customers.full_name}，預約已取消。原因：${apt.cancellation_reason || '無'}${details}`
       }
     }
 
@@ -63,26 +61,20 @@ serve(async (req) => {
         hostname: "smtp.gmail.com",
         port: 465,
         tls: true,
-        auth: { username: config.user, password: config.pass },
+        auth: { username: config.user.trim(), password: config.pass.trim() },
       },
     })
 
-    // 使用物件格式設定 from，讓套件自動處理 UTF-8 編碼
     await client.send({
-      from: {
-        name: config.from_name || '預約系統',
-        email: config.user
-      },
+      from: config.user.trim(),
       to: toEmail,
-      subject: subject,
-      html: `<html><body style="font-family:sans-serif;">${htmlContent}</body></html>`,
+      subject: encodeBase64(subject),
+      html: `<html><body style="font-family: sans-serif;">${htmlContent}</body></html>`,
     })
 
     await client.close()
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders, status: 200 })
-
   } catch (error: any) {
-    console.error(error)
     return new Response(JSON.stringify({ error: error.message }), { headers: corsHeaders, status: 500 })
   }
 })
