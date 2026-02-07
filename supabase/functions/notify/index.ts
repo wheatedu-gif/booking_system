@@ -1,5 +1,5 @@
 // ---------------------------------------------------------
-// Supabase Edge Function: notify (極簡穩定版)
+// Supabase Edge Function: notify (除錯與穩定強化版)
 // ---------------------------------------------------------
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
@@ -11,41 +11,48 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// 修復中文主旨亂碼
 function encodeHeader(str: string): string {
   if (/^[\x00-\x7F]*$/.test(str)) return str;
   const encoder = new TextEncoder();
   const data = encoder.encode(str);
   let binary = "";
-  for (let i = 0; i < data.length; i++) {
-    binary += String.fromCharCode(data[i]);
-  }
+  for (let i = 0; i < data.length; i++) binary += String.fromCharCode(data[i]);
   return `=?UTF-8?B?${btoa(binary)}?=`;
 }
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
-  try {
-    const { record_id, type, target_email } = await req.json()
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+  console.log("--- 收到通知請求 ---");
 
-    // 1. 讀取發信設定
+  try {
+    const payload = await req.json();
+    const { record_id, type, target_email } = payload;
+    console.log("請求參數:", JSON.stringify(payload));
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseUrl || !supabaseKey) {
+        console.error("【關鍵錯誤】: 缺少環境變數 SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY");
+        throw new Error("環境變數未設定");
+    }
+
+    const supabaseClient = createClient(supabaseUrl, supabaseKey);
+
     const { data: settings, error: settingsError } = await supabaseClient
       .from('system_settings')
       .select('value')
       .eq('key', 'email_config')
-      .maybeSingle()
+      .maybeSingle();
 
-    if (settingsError || !settings?.value) {
-        throw new Error("找不到 Email 設定，請在後台設定 SMTP 帳密。");
+    if (settingsError) throw settingsError;
+
+    const config = settings?.value;
+    if (!config || !config.enabled) {
+        console.log("通知功能未啟用");
+        return new Response(JSON.stringify({ message: "Disabled" }), { headers: corsHeaders });
     }
-
-    const config = settings.value;
-    if (!config.enabled) return new Response(JSON.stringify({ message: "Email Disabled" }), { headers: corsHeaders })
 
     let toEmail = ''
     let subject = ''
@@ -53,8 +60,8 @@ serve(async (req) => {
 
     if (type === 'test') {
       toEmail = (target_email || config.user).trim();
-      subject = '發信功能測試';
-      html = '<h3>🎉 測試成功！</h3>您的 Gmail SMTP 設定運作正常。';
+      subject = '預約系統測試信';
+      html = '<h3>測試成功！</h3>您的 Gmail SMTP 已正確連線。';
     } else {
       const { data: apt, error: aptError } = await supabaseClient
         .from('appointments')
@@ -62,7 +69,7 @@ serve(async (req) => {
         .eq('id', record_id)
         .single();
 
-      if (aptError || !apt) throw new Error("找不到該筆預約資料");
+      if (aptError || !apt) throw new Error("預約資料查詢失敗");
       
       toEmail = apt.customers.email.trim();
       const info = `<br>日期：${apt.booking_date}<br>時間：${apt.booking_time.slice(0,5)}`;
@@ -71,7 +78,7 @@ serve(async (req) => {
         subject = '已收到預約申請';
         html = `您好 ${apt.customers.full_name}，預約待確認中。${info}`;
       } else if (type === 'update') {
-        subject = '預約狀態更新';
+        subject = '預約確認成功通知';
         html = `您的預約已確認。${info}`;
       } else if (type === 'cancel') {
         subject = '預約取消通知';
@@ -79,7 +86,6 @@ serve(async (req) => {
       }
     }
 
-    // 2. 執行發信
     const client = new SMTPClient({
       connection: {
         hostname: "smtp.gmail.com",
@@ -99,11 +105,12 @@ serve(async (req) => {
       html: `<html><body style="font-family:sans-serif;">${html}</body></html>`,
     })
 
-    await client.close()
+    await client.close();
+    console.log("郵件發送成功");
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders, status: 200 })
 
   } catch (error: any) {
-    console.error('Email Error:', error.message)
+    console.error("【錯誤回報】:", error.message);
     return new Response(JSON.stringify({ error: error.message }), { headers: corsHeaders, status: 500 })
   }
 })
