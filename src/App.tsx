@@ -8,6 +8,7 @@ import { CustomerAuthPage } from './pages/CustomerAuthPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { BookingPage } from './pages/BookingPage';
 import { MyAppointments } from './pages/MyAppointments';
+import { ProfilePage } from './pages/ProfilePage';
 
 function App() {
   return (
@@ -20,17 +21,15 @@ function App() {
             
             {/* 客戶端路由 */}
             <Route path="/login" element={<CustomerAuthPage />} />
-            <Route path="/booking" element={<BookingPage />} /> {/* 內部已做登入檢查 */}
-            <Route path="/my-appointments" element={<MyAppointments />} /> {/* 稍後修正此頁邏輯 */}
+            <Route path="/booking" element={<BookingPage />} />
+            <Route path="/my-appointments" element={<MyAppointments />} />
+            <Route path="/profile" element={<ProfilePage />} />
             
             {/* 管理端路由 */}
             <Route path="/admin/login" element={<AdminLoginPage />} />
             <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
               <Route path="/admin" element={<AdminDashboard />} />
             </Route>
-
-            <Route path="/profile" element={<div className="p-12 text-center text-slate-500">此功能已整合至預約頁面。</div>} />
-
           </Routes>
         </main>
         <footer className="bg-white border-t border-slate-200 py-8 mt-auto">
