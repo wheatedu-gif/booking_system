@@ -1,5 +1,6 @@
 // ---------------------------------------------------------
-// Supabase Edge Function: notify (修復 From 地址格式錯誤)
+// Supabase Edge Function: notify (標準 Denomailer 版)
+// 解決中文亂碼並支援所有預約通知與測試模式
 // ---------------------------------------------------------
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
@@ -21,24 +22,40 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
+    // 1. 讀取設定
     const { data: settings } = await supabaseClient.from('system_settings').select('value').eq('key', 'email_config').maybeSingle()
     const config = settings?.value
-    if (!config || !config.enabled) return new Response(JSON.stringify({ message: "Email disabled" }), { headers: corsHeaders })
+    if (!config || !config.enabled) return new Response(JSON.stringify({ message: "Disabled" }), { headers: corsHeaders })
 
     let toEmail = ''
     let subject = ''
-    let body = ''
+    let htmlContent = ''
 
     if (type === 'test') {
       toEmail = target_email || config.user
-      subject = '[測試] 預約系統發信測試'
-      body = '發信功能測試成功！代表設定正確。'
+      subject = '預約系統：發信功能測試成功'
+      htmlContent = `<h3>🎉 測試信發送成功！</h3><p>這代表您的 Gmail SMTP 設定運作正常。</p><p>發送時間：${new Date().toLocaleString()}</p>`
     } else {
-      const { data: apt } = await supabaseClient.from('appointments').select('*, customers(email, full_name)').eq('id', record_id).single()
-      if (!apt) throw new Error("Appointment missing")
-      toEmail = apt.customers.email
-      subject = '預約狀態更新通知'
-      body = `您好 ${apt.customers.full_name}，您的預約狀態已更新為：${apt.status}。`
+      // 2. 讀取預約與客戶資料
+      const { data: appointment } = await supabaseClient.from('appointments').select('*, customers(email, full_name)').eq('id', record_id).single()
+      if (!appointment) throw new Error("Appointment not found")
+      
+      const customer = appointment.customers
+      toEmail = customer.email
+      const info = `<br><hr><br><b>預約詳情：</b><br>日期：${appointment.booking_date}<br>時間：${appointment.booking_time.slice(0,5)}`
+
+      if (type === 'new') {
+          subject = '預約通知：已收到您的預約申請'
+          htmlContent = `您好 ${customer.full_name}，<br><br>我們已收到您的預約申請，目前狀態為<b>待處理</b>。<br>${info}`
+      } else if (type === 'update' && appointment.status === 'confirmed') {
+          subject = '預約確認：您的預約已成功'
+          htmlContent = `您好 ${customer.full_name}，<br><br>您的預約已<b>確認成功</b>，期待您的光臨！<br>${info}`
+      } else if (type === 'cancel') {
+          subject = '預約取消通知'
+          htmlContent = `您好 ${customer.full_name}，<br><br>您的預約已被取消。<br>原因：${appointment.cancellation_reason || '無'}<br>${info}`
+      } else {
+          return new Response(JSON.stringify({ message: "Skipped" }), { headers: corsHeaders })
+      }
     }
 
     const client = new SMTPClient({
@@ -50,17 +67,22 @@ serve(async (req) => {
       },
     })
 
+    // 使用物件格式設定 from，讓套件自動處理 UTF-8 編碼
     await client.send({
-      from: config.user, 
+      from: {
+        name: config.from_name || '預約系統',
+        email: config.user
+      },
       to: toEmail,
       subject: subject,
-      content: body,
+      html: `<html><body style="font-family:sans-serif;">${htmlContent}</body></html>`,
     })
 
     await client.close()
-    return new Response(JSON.stringify({ success: true }), { headers: corsHeaders })
+    return new Response(JSON.stringify({ success: true }), { headers: corsHeaders, status: 200 })
 
   } catch (error: any) {
+    console.error(error)
     return new Response(JSON.stringify({ error: error.message }), { headers: corsHeaders, status: 500 })
   }
 })
