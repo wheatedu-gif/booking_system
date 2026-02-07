@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useCustomer } from '../hooks/useCustomer';
 import { Appointment } from '../types';
-import { Calendar, Clock, AlertCircle, ExternalLink, Trash2, Info } from 'lucide-react';
+import { Calendar, Clock, AlertCircle, ExternalLink, History, ArrowRight, CheckCircle, XCircle } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
+import { format } from 'date-fns';
 
 export const MyAppointments: React.FC = () => {
   const { customer, loading: authLoading } = useCustomer();
@@ -12,175 +13,118 @@ export const MyAppointments: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!authLoading && !customer) {
-      navigate('/login');
-      return;
-    }
-
+    if (!authLoading && !customer) navigate('/login');
     if (customer) {
-      fetchAppointments();
+      supabase
+        .from('appointments')
+        .select('*')
+        .eq('customer_id', customer.id)
+        .order('booking_date', { ascending: false })
+        .then(({ data }) => {
+          setAppointments(data || []);
+          setLoading(false);
+        });
     }
   }, [customer, authLoading, navigate]);
 
-  const fetchAppointments = async () => {
-    setLoading(true);
-    const { data } = await supabase
-      .from('appointments')
-      .select('*')
-      .eq('customer_id', customer?.id)
-      .order('booking_date', { ascending: false });
-    
-    setAppointments(data || []);
-    setLoading(false);
-  };
-
-  const handleCancel = async (id: string) => {
-    if (!window.confirm('確定要取消此預約嗎？')) return;
-
-    const { error } = await supabase
-      .from('appointments')
-      .update({ status: 'cancelled', cancellation_reason: '客戶自行取消' })
-      .eq('id', id);
-
-    if (error) {
-      alert('取消失敗: ' + error.message);
-    } else {
-      setAppointments(prev => prev.map(apt => 
-        apt.id === id ? { ...apt, status: 'cancelled', cancellation_reason: '客戶自行取消' } : apt
-      ));
-    }
-  };
-
-  const getGoogleCalendarUrl = (apt: Appointment) => {
-    const dateStr = apt.booking_date.replace(/-/g, '');
-    const timeStr = apt.booking_time.replace(/:/g, '').slice(0, 4);
-    const start = `${dateStr}T${timeStr}00`;
-    
-    const [h, m] = apt.booking_time.split(':').map(Number);
-    const endH = (h + 1).toString().padStart(2, '0');
-    const endM = m.toString().padStart(2, '0');
-    const end = `${dateStr}T${endH}${endM}00`;
-    
-    const details = [`預約人: ${customer?.full_name}`];
-    if (apt.booking_data) {
-      Object.entries(apt.booking_data).forEach(([key, value]) => {
-        details.push(`${key}: ${value}`);
-      });
-    }
-
-    return `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('預約服務')}&dates=${start}/${end}&details=${encodeURIComponent(details.join('\n'))}&sf=true&output=xml`;
-  };
-
   if (authLoading || loading) return (
     <div className="min-h-[60vh] flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
     </div>
   );
 
+  const getStatusStyle = (status: string) => {
+    switch (status) {
+      case 'confirmed': return 'bg-green-100 text-green-700 border-green-200';
+      case 'cancelled': return 'bg-red-50 text-red-400 border-red-100 opacity-60';
+      default: return 'bg-amber-100 text-amber-700 border-amber-200';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'confirmed': return <CheckCircle size={14} />;
+      case 'cancelled': return <XCircle size={14} />;
+      default: return <AlertCircle size={14} />;
+    }
+  };
+
   return (
-    <div className="max-w-4xl mx-auto py-12 px-4">
-      <h1 className="text-3xl font-bold text-slate-800 mb-8 flex items-center gap-3">
-        <Calendar className="text-blue-600" size={32} /> 我的預約紀錄
-      </h1>
+    <div className="max-w-4xl mx-auto py-12 px-4 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
+        <div>
+            <h1 className="text-4xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+                <History className="text-blue-600" size={36} /> 我的預約紀錄
+            </h1>
+            <p className="text-slate-400 mt-2 font-medium">查看您過去與即將到來的服務預約</p>
+        </div>
+        <Link to="/booking" className="btn-primary px-8 py-3 rounded-2xl font-black shadow-lg shadow-blue-100 flex items-center gap-2">
+            立即新增預約 <ArrowRight size={18} />
+        </Link>
+      </div>
 
       {appointments.length === 0 ? (
-        <div className="bg-white p-16 rounded-3xl border border-dashed border-slate-300 text-center shadow-sm">
-          <AlertCircle size={64} className="mx-auto text-slate-200 mb-4" />
-          <p className="text-slate-500 text-lg">尚無任何預約紀錄</p>
-          <button 
-            onClick={() => navigate('/booking')}
-            className="btn-primary mt-6 px-8 py-3 rounded-xl"
-          >
-            立即預約服務
-          </button>
+        <div className="bg-white rounded-[3rem] p-20 text-center border border-slate-100 shadow-xl shadow-slate-200/50">
+          <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Calendar className="text-slate-200" size={40} />
+          </div>
+          <h3 className="text-xl font-bold text-slate-400 italic text-center">尚無任何預約紀錄</h3>
+          <p className="text-slate-300 mt-2">現在就預約您的第一個服務吧！</p>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="grid gap-6">
           {appointments.map((apt) => (
-            <Link key={apt.id} to={`/appointment/${apt.id}`} className="block">
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-xl hover:border-blue-200 transition-all duration-300 group">
-                <div className="p-6">
-                <div className="flex flex-col md:flex-row justify-between gap-6">
-                  {/* 左側：基本資訊 */}
-                  <div className="flex-1 space-y-4">
-                    <div className="flex items-start gap-4">
-                      <div className="bg-blue-50 p-3 rounded-xl text-blue-600 shrink-0">
-                        <Calendar size={24} />
-                      </div>
-                      <div>
-                        <div className="text-2xl font-bold text-slate-800">{apt.booking_date}</div>
-                        <div className="text-slate-500 flex items-center gap-2 mt-1">
-                          <Clock size={18} /> {apt.booking_time.slice(0, 5)}
-                        </div>
-                      </div>
+            <Link key={apt.id} to={`/appointment/${apt.id}`} className="group block">
+              <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden hover:shadow-xl hover:shadow-blue-500/5 hover:border-blue-100 transition-all duration-500 relative">
+                <div className="p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div className="flex items-center gap-6">
+                    <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex flex-col items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                        <span className="text-[10px] font-black uppercase tracking-widest">{format(new Date(apt.booking_date), 'MMM')}</span>
+                        <span className="text-xl font-black leading-none">{format(new Date(apt.booking_date), 'dd')}</span>
                     </div>
-
-                    {/* 詳細資料區塊 */}
-                    {apt.booking_data && Object.keys(apt.booking_data).length > 0 && (
-                      <div className="bg-slate-50 rounded-xl p-4 mt-4">
-                        <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                          <Info size={14} /> 預約詳細資訊
-                        </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
-                          {Object.entries(apt.booking_data).map(([key, value]) => (
-                            <div key={key} className="flex justify-between border-b border-slate-100 py-1">
-                              <span className="text-slate-500 text-sm">{key}</span>
-                              <span className="text-slate-800 text-sm font-medium">{String(value)}</span>
-                            </div>
-                          ))}
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xl font-black text-slate-800 tracking-tight">{apt.booking_date}</span>
+                            <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase border ${getStatusStyle(apt.status)}`}>
+                                {getStatusIcon(apt.status)}
+                                {apt.status === 'confirmed' ? '已確認' : apt.status === 'cancelled' ? '已取消' : '待處理'}
+                            </span>
                         </div>
-                      </div>
-                    )}
-
-                    {apt.cancellation_reason && (
-                      <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100 flex items-start gap-3">
-                        <AlertCircle size={20} className="shrink-0" />
-                        <div>
-                          <div className="font-bold text-sm text-red-700">預約已取消</div>
-                          <div className="text-sm">原因：{apt.cancellation_reason}</div>
+                        <div className="flex items-center gap-4 text-slate-400 font-bold text-sm">
+                            <span className="flex items-center gap-1.5"><Clock size={14} className="text-blue-400"/> {apt.booking_time.slice(0,5)}</span>
+                            <span className="flex items-center gap-1.5"><Calendar size={14} className="text-blue-400"/> {format(new Date(apt.booking_date), 'EEEE')}</span>
                         </div>
-                      </div>
-                    )}
+                    </div>
                   </div>
 
-                  {/* 右側：狀態與操作 */}
-                  <div className="flex flex-col justify-between items-end gap-4 min-w-[160px]">
-                    <div className="text-right">
-                      <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-bold shadow-sm ${
-                        apt.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                        apt.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
-                      }`}>
-                        {apt.status === 'confirmed' ? '已確認' : apt.status === 'cancelled' ? '已取消' : '待處理'}
-                      </span>
-                      <div className="text-[10px] text-slate-400 mt-2">
-                        ID: {apt.id.slice(0, 8)}...
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col w-full gap-2">
-                      {apt.status !== 'cancelled' && (
-                        <>
-                          <a
-                            href={getGoogleCalendarUrl(apt)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm"
-                          >
-                            <ExternalLink size={16} /> Google 行事曆
-                          </a>
-                          <button
-                            onClick={() => handleCancel(apt.id)}
-                            className="flex items-center justify-center gap-2 text-red-500 hover:bg-red-50 py-2.5 rounded-xl text-sm font-bold transition-all"
-                          >
-                            <Trash2 size={16} /> 取消預約
-                          </button>
-                        </>
-                      )}
+                  <div className="flex items-center gap-3">
+                    {apt.status === 'confirmed' && (
+                        <button 
+                            onClick={(e) => {
+                                e.preventDefault();
+                                window.open(`https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('服務預約')}&dates=${apt.booking_date.replace(/-/g, '')}T${apt.booking_time.replace(/:/g, '')}00&sf=true&output=xml`);
+                            }}
+                            className="p-3 bg-slate-50 text-slate-400 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all"
+                            title="加入 Google 行事曆"
+                        >
+                            <ExternalLink size={20} />
+                        </button>
+                    )}
+                    <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                        <ArrowRight size={24} />
                     </div>
                   </div>
                 </div>
+                
+                {apt.cancellation_reason && (
+                    <div className="px-8 pb-6 -mt-2">
+                        <div className="p-4 bg-red-50 rounded-2xl text-xs text-red-500 font-bold border border-red-100 flex items-center gap-2">
+                            <XCircle size={14}/> 取消原因：{apt.cancellation_reason}
+                        </div>
+                    </div>
+                )}
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}
