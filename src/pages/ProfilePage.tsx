@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useCustomer } from '../hooks/useCustomer';
-import { User, Phone, Mail, Save, ShieldCheck } from 'lucide-react';
+import { User, Phone, Mail, Save, ShieldCheck, Lock, Key } from 'lucide-react';
+import { useToast } from '../components/Toast';
 
 export const ProfilePage: React.FC = () => {
   const { customer, logout } = useCustomer();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [passLoading, setPassLoading] = useState(false);
+  
   const [profile, setProfile] = useState({
     full_name: '',
     email: '',
@@ -13,9 +17,14 @@ export const ProfilePage: React.FC = () => {
     custom_data: {} as any
   });
 
+  const [passwordData, setPasswordData] = useState({
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+
   useEffect(() => {
     if (customer) {
-      // 從資料庫重新讀取最新資料，確保不是舊的 session 快取
       supabase.from('customers').select('*').eq('id', customer.id).single()
         .then(({ data }) => {
           if (data) {
@@ -44,114 +53,65 @@ export const ProfilePage: React.FC = () => {
       })
       .eq('id', customer.id);
 
-    if (error) {
-      alert('更新失敗：' + error.message);
-    } else {
-      alert('個人資料已成功更新！');
-      // 更新本地 Session 資料 (可選)
-      const updated = { ...customer, full_name: profile.full_name };
-      localStorage.setItem('customer_session', JSON.stringify(updated));
-    }
+    if (error) showToast('更新失敗', 'error');
+    else showToast('基本資料已更新');
     setLoading(false);
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+        showToast('新密碼與確認密碼不符', 'error');
+        return;
+    }
+    setPassLoading(true);
+
+    // 呼叫後端 RPC 修改密碼 (需建立 update_customer_password 函數)
+    const { data, error } = await supabase.rpc('update_customer_password', {
+        p_customer_id: customer?.id,
+        p_old_password: passwordData.oldPassword,
+        p_new_password: passwordData.newPassword
+    });
+
+    if (error || !data.success) {
+        showToast(data?.message || '密碼修改失敗', 'error');
+    } else {
+        showToast('密碼已成功修改');
+        setPasswordData({ oldPassword: '', newPassword: '', confirmPassword: '' });
+    }
+    setPassLoading(false);
   };
 
   if (!customer) return null;
 
   return (
-    <div className="max-w-2xl mx-auto py-12 px-4">
-      <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 overflow-hidden border border-slate-100">
-        <div className="bg-blue-600 p-10 text-white relative">
-          <div className="relative z-10">
-            <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
-              <User size={32} /> 個人資料設定
-            </h1>
-            <p className="text-blue-100 mt-2 opacity-80 font-medium">管理您的帳號資訊與聯絡方式</p>
-          </div>
-          <ShieldCheck className="absolute right-[-20px] bottom-[-20px] text-white/10 w-48 h-48" />
+    <div className="max-w-4xl mx-auto py-12 px-4 grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="lg:col-span-2 space-y-8">
+        <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 overflow-hidden border border-slate-100">
+            <div className="bg-blue-600 p-10 text-white relative overflow-hidden">
+                <h1 className="text-3xl font-black flex items-center gap-3 relative z-10"><User size={32} /> 資料設定</h1>
+                <ShieldCheck className="absolute right-[-20px] bottom-[-20px] text-white/10 w-48 h-48" />
+            </div>
+            <form onSubmit={handleSave} className="p-10 space-y-6">
+                <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block">您的全名</label><input type="text" className="input-field bg-slate-50 border-none rounded-2xl py-4" value={profile.full_name} onChange={e => setProfile({...profile, full_name: e.target.value})} /></div>
+                <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block">聯絡電話</label><input type="tel" className="input-field bg-slate-50 border-none rounded-2xl py-4" value={profile.phone} onChange={e => setProfile({...profile, phone: e.target.value})} /></div>
+                <button type="submit" disabled={loading} className="btn-primary w-full py-4 rounded-2xl font-black shadow-lg shadow-blue-100">儲存基本資料</button>
+            </form>
         </div>
+      </div>
 
-        <form onSubmit={handleSave} className="p-10 space-y-8">
-          <div className="grid grid-cols-1 gap-6">
-            {/* 固定欄位 */}
-            <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">帳號 Email (不可修改)</label>
-              <div className="relative">
-                <input type="email" disabled className="input-field bg-slate-50 border-none text-slate-400 cursor-not-allowed pl-12 py-4 rounded-2xl" value={profile.email} />
-                <Mail size={20} className="absolute left-4 top-4 text-slate-300" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">您的全名</label>
-              <div className="relative">
-                <input 
-                  type="text" 
-                  required 
-                  className="input-field pl-12 py-4 rounded-2xl bg-slate-50 border-none focus:bg-white transition-all shadow-inner focus:shadow-none" 
-                  value={profile.full_name} 
-                  onChange={e => setProfile({...profile, full_name: e.target.value})}
-                />
-                <User size={20} className="absolute left-4 top-4 text-slate-300" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">聯絡電話</label>
-              <div className="relative">
-                <input 
-                  type="tel" 
-                  className="input-field pl-12 py-4 rounded-2xl bg-slate-50 border-none focus:bg-white transition-all shadow-inner focus:shadow-none" 
-                  value={profile.phone} 
-                  onChange={e => setProfile({...profile, phone: e.target.value})}
-                />
-                <Phone size={20} className="absolute left-4 top-4 text-slate-300" />
-              </div>
-            </div>
-
-            {/* 動態資料欄位編輯 (以文字框呈現) */}
-            {Object.keys(profile.custom_data).length > 0 && (
-              <div className="pt-4 border-t border-slate-50 space-y-6">
-                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest">其他詳細資訊</h3>
-                {Object.entries(profile.custom_data).map(([key, value]) => (
-                  <div key={key}>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">{key}</label>
-                    <input 
-                      type="text"
-                      className="input-field pl-6 py-4 rounded-2xl bg-slate-50 border-none focus:bg-white transition-all shadow-inner" 
-                      value={String(value)} 
-                      onChange={e => {
-                        const next = { ...profile.custom_data, [key]: e.target.value };
-                        setProfile({ ...profile, custom_data: next });
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-4 pt-4">
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full btn-primary py-5 rounded-2xl font-black shadow-xl shadow-blue-200 flex items-center justify-center gap-2 transform transition-all active:scale-[0.98]"
-            >
-              {loading ? (
-                <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <><Save size={20} /> 儲存變更並更新</>
-              )}
-            </button>
-            
-            <button
-              type="button"
-              onClick={() => { logout(); window.location.href = '/'; }}
-              className="text-slate-400 text-sm font-bold hover:text-red-500 transition-colors py-2"
-            >
-              安全登出帳號
-            </button>
-          </div>
-        </form>
+      <div className="space-y-8">
+        <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 p-8 border border-slate-100">
+            <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2"><Lock className="text-blue-600" /> 修改密碼</h3>
+            <form onSubmit={handleChangePassword} className="space-y-4">
+                <input type="password" placeholder="目前密碼" className="input-field bg-slate-50 border-none rounded-xl" value={passwordData.oldPassword} onChange={e => setPasswordData({...passwordData, oldPassword: e.target.value})} />
+                <input type="password" placeholder="新密碼" className="input-field bg-slate-50 border-none rounded-xl" value={passwordData.newPassword} onChange={e => setPasswordData({...passwordData, newPassword: e.target.value})} />
+                <input type="password" placeholder="確認新密碼" className="input-field bg-slate-50 border-none rounded-xl" value={passwordData.confirmPassword} onChange={e => setPasswordData({...passwordData, confirmPassword: e.target.value})} />
+                <button type="submit" disabled={passLoading} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold hover:bg-slate-900 transition-all">更新安全密碼</button>
+            </form>
+        </div>
+        
+        <button onClick={() => { logout(); window.location.href = '/'; }} className="w-full py-4 text-red-500 font-bold hover:bg-red-50 rounded-2xl transition-all">登出此帳號</button>
       </div>
     </div>
   );

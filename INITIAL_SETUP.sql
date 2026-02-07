@@ -1,5 +1,5 @@
 -- =========================================================
--- 智慧預約系統 - 終極全功能整合初始化腳本 (V7 功能完備版)
+-- 智慧預約系統 - 終極整合初始化腳本 (V7 完整防護版)
 -- =========================================================
 
 -- 0. 環境與擴充功能
@@ -10,6 +10,7 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS handle_new_admin_user();
 DROP FUNCTION IF EXISTS register_customer(TEXT, TEXT, TEXT, JSONB);
 DROP FUNCTION IF EXISTS login_customer(TEXT, TEXT);
+DROP FUNCTION IF EXISTS update_customer_password(UUID, TEXT, TEXT);
 
 DROP TABLE IF EXISTS appointments CASCADE;
 DROP TABLE IF EXISTS form_definitions CASCADE;
@@ -62,7 +63,7 @@ CREATE TABLE business_hours (day_of_week INT PRIMARY KEY CHECK (day_of_week BETW
 CREATE TABLE special_dates (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), date DATE UNIQUE NOT NULL, is_closed BOOLEAN DEFAULT true, start_time TIME, end_time TIME, note TEXT);
 CREATE TABLE system_settings (key TEXT PRIMARY KEY, value JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW());
 
--- 3. RLS 政策
+-- 3. 設定 RLS 政策
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
@@ -89,6 +90,8 @@ CREATE POLICY "Public View Appointments" ON appointments FOR SELECT USING (true)
 CREATE POLICY "Public Create Appointment" ON appointments FOR INSERT WITH CHECK (true);
 
 -- 4. 後端函數 (RPC)
+
+-- [RPC] 客戶註冊
 CREATE OR REPLACE FUNCTION register_customer(p_email TEXT, p_password TEXT, p_full_name TEXT, p_custom_data JSONB DEFAULT '{}'::jsonb) 
 RETURNS jsonb AS $$
 DECLARE new_id UUID;
@@ -103,6 +106,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- [RPC] 客戶登入
 CREATE OR REPLACE FUNCTION login_customer(p_email TEXT, p_password TEXT) 
 RETURNS jsonb AS $$
 DECLARE target_customer RECORD;
@@ -115,6 +119,21 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- [RPC] 修改密碼
+CREATE OR REPLACE FUNCTION update_customer_password(p_customer_id UUID, p_old_password TEXT, p_new_password TEXT)
+RETURNS jsonb AS $$
+DECLARE target_customer RECORD;
+BEGIN
+  SELECT * INTO target_customer FROM customers WHERE id = p_customer_id;
+  IF target_customer.password_hash != crypt(p_old_password, target_customer.password_hash) THEN
+    RETURN jsonb_build_object('success', false, 'message', '舊密碼驗證失敗');
+  END IF;
+  UPDATE customers SET password_hash = crypt(p_new_password, gen_salt('bf')) WHERE id = p_customer_id;
+  RETURN jsonb_build_object('success', true);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- [Trigger] 管理員帳號自動同步
 CREATE OR REPLACE FUNCTION handle_new_admin_user() RETURNS trigger AS $$
 BEGIN
   INSERT INTO public.profiles (id, email, full_name, role)
@@ -126,7 +145,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE PROCEDURE handle_new_admin_user();
 
--- 5. 初始化資料
+-- 5. 初始化資料 (省略部分重複內容)
 INSERT INTO form_definitions (type, fields) VALUES 
 ('customer_profile', '[{"id": "sys_name", "name": "full_name", "label": "姓名", "type": "text", "required": true, "isSystem": true}, {"id": "sys_email", "name": "email", "label": "電子郵件", "type": "text", "required": true, "isSystem": true}, {"id": "sys_phone", "name": "phone", "label": "聯絡電話", "type": "tel", "required": false, "isSystem": true}]'::jsonb),
 ('booking_form', '[{"id": "sys_date", "name": "date", "label": "預約日期", "type": "date", "required": true, "isSystem": true}, {"id": "sys_time", "name": "time", "label": "預約時間", "type": "text", "required": true, "isSystem": true}]'::jsonb);
