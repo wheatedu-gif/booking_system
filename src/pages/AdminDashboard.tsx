@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { FormDefinition, FormField, Appointment } from '../types';
-import { Plus, Trash2, Save, Settings, Users, Calendar as CalendarIcon, FormInput, Clock, LayoutTemplate, List, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import { Plus, Trash2, Save, Settings, Users, Calendar as CalendarIcon, FormInput, Clock, LayoutTemplate, List, ChevronLeft, ChevronRight, Lock, AlertCircle } from 'lucide-react';
 import { AvailabilitySettings } from './AvailabilitySettings';
 import { WebsiteEditor } from './WebsiteEditor';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO } from 'date-fns';
@@ -18,7 +18,6 @@ export const AdminDashboard: React.FC = () => {
   }, [activeTab]);
 
   async function fetchData() {
-    // CMS 和 Availability 自行管理數據，不需要在這裡全域 fetch
     if (activeTab === 'cms' || activeTab === 'availability') {
         setLoading(false);
         return;
@@ -107,7 +106,7 @@ export const AdminDashboard: React.FC = () => {
         </div>
 
         {/* Content */}
-        <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[600px]">
           {activeTab === 'cms' ? (
               <WebsiteEditor />
           ) : (
@@ -129,7 +128,6 @@ export const AdminDashboard: React.FC = () => {
 
 // --- 子元件 ---
 
-// 1. 預約日曆視圖元件
 const AppointmentCalendar: React.FC<{ appointments: Appointment[], onStatusChange: (id: string, s: string, reason?: string) => void }> = ({ appointments, onStatusChange }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -148,7 +146,6 @@ const AppointmentCalendar: React.FC<{ appointments: Appointment[], onStatusChang
 
   return (
     <div className="bg-white">
-      {/* 日曆頭部 */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-bold text-slate-700">
           {format(currentDate, 'yyyy 年 M 月', { locale: zhTW })}
@@ -160,14 +157,12 @@ const AppointmentCalendar: React.FC<{ appointments: Appointment[], onStatusChang
         </div>
       </div>
 
-      {/* 星期標頭 */}
       <div className="grid grid-cols-7 border-b border-slate-200 mb-2">
         {['日', '一', '二', '三', '四', '五', '六'].map(d => (
           <div key={d} className="py-2 text-center text-sm font-bold text-slate-500">{d}</div>
         ))}
       </div>
 
-      {/* 日期網格 */}
       <div className="grid grid-cols-7 gap-1 lg:gap-2">
         {calendarDays.map((day, idx) => {
           const dayApts = getDayAppointments(day);
@@ -192,13 +187,11 @@ const AppointmentCalendar: React.FC<{ appointments: Appointment[], onStatusChang
                       'bg-yellow-50 border-yellow-500 text-yellow-700'
                     }`}
                     onClick={() => {
-                        // 簡單的點擊互動：這裡可以做成彈出 Modal，為了簡便先用 confirm
                         if(apt.status !== 'cancelled' && window.confirm(`處理預約：\n${(apt as any).customers?.full_name} (${apt.booking_time})\n\n要取消此預約嗎？`)) {
                             const reason = window.prompt('取消原因：');
                             if (reason) onStatusChange(apt.id, 'cancelled', reason);
                         }
                     }}
-                    title={`${(apt as any).customers?.full_name} - ${apt.status}`}
                   >
                     <div className="font-bold">{apt.booking_time.slice(0, 5)}</div>
                     <div className="truncate">{(apt as any).customers?.full_name}</div>
@@ -213,7 +206,6 @@ const AppointmentCalendar: React.FC<{ appointments: Appointment[], onStatusChang
   );
 };
 
-// 2. 預約管理主元件 (包含切換功能)
 const AppointmentManager: React.FC<{ appointments: Appointment[], onStatusChange: (id: string, s: string, reason?: string) => void }> = ({ appointments, onStatusChange }) => {
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
 
@@ -229,18 +221,8 @@ const AppointmentManager: React.FC<{ appointments: Appointment[], onStatusChange
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-bold text-slate-800">預約管理</h2>
         <div className="flex bg-slate-100 p-1 rounded-lg">
-            <button 
-                onClick={() => setViewMode('list')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-                <List size={16} /> 列表
-            </button>
-            <button 
-                onClick={() => setViewMode('calendar')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-                <CalendarIcon size={16} /> 日曆
-            </button>
+            <button onClick={() => setViewMode('list')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><List size={16} /> 列表</button>
+            <button onClick={() => setViewMode('calendar')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><CalendarIcon size={16} /> 日曆</button>
         </div>
       </div>
 
@@ -248,7 +230,6 @@ const AppointmentManager: React.FC<{ appointments: Appointment[], onStatusChange
           <AppointmentCalendar appointments={appointments} onStatusChange={onStatusChange} />
       ) : (
         <div className="overflow-x-auto">
-            {/* 列表視圖代碼 */}
             <table className="w-full text-left border-collapse">
             <thead>
                 <tr className="border-b border-slate-100">
@@ -285,20 +266,10 @@ const AppointmentManager: React.FC<{ appointments: Appointment[], onStatusChange
                     <td className="py-4 px-4">
                     <div className="flex gap-2">
                         {apt.status !== 'confirmed' && apt.status !== 'cancelled' && (
-                        <button 
-                            onClick={() => onStatusChange(apt.id, 'confirmed')} 
-                            className="bg-green-50 text-green-600 hover:bg-green-100 px-3 py-1 rounded text-sm font-medium transition-colors"
-                        >
-                            確認
-                        </button>
+                        <button onClick={() => onStatusChange(apt.id, 'confirmed')} className="bg-green-50 text-green-600 hover:bg-green-100 px-3 py-1 rounded text-sm font-medium transition-colors">確認</button>
                         )}
                         {apt.status !== 'cancelled' && (
-                        <button 
-                            onClick={() => handleCancel(apt.id)} 
-                            className="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1 rounded text-sm font-medium transition-colors"
-                        >
-                            取消
-                        </button>
+                        <button onClick={() => handleCancel(apt.id)} className="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1 rounded text-sm font-medium transition-colors">取消</button>
                         )}
                     </div>
                     </td>
@@ -314,19 +285,6 @@ const AppointmentManager: React.FC<{ appointments: Appointment[], onStatusChange
 
 const FormManager: React.FC<{ formDefs: FormDefinition[], onRefresh: () => void }> = ({ formDefs, onRefresh }) => {
   const [editingDef, setEditingDef] = useState<FormDefinition | null>(null);
-
-  // 定義系統預設欄位 (僅供顯示)
-  const SYSTEM_FIELDS: Record<string, {label: string, type: string, req: boolean}[]> = {
-    customer_profile: [
-      { label: '姓名 (full_name)', type: '文字', req: true },
-      { label: '電子郵件 (email)', type: 'Email', req: true },
-      { label: '電話 (phone)', type: '電話', req: false },
-    ],
-    booking_form: [
-      { label: '預約日期 (date)', type: '日期', req: true },
-      { label: '預約時間 (time)', type: '時間', req: true },
-    ]
-  };
 
   const handleSave = async () => {
     if (!editingDef) return;
@@ -357,113 +315,116 @@ const FormManager: React.FC<{ formDefs: FormDefinition[], onRefresh: () => void 
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-slate-800 mb-6">表單欄位定義</h2>
+      <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+        <FormInput className="text-blue-600" /> 表單欄位定義
+      </h2>
       {!editingDef ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {formDefs.map((def) => (
-            <div key={def.id} className="p-4 border border-slate-200 rounded-lg hover:border-blue-300 transition-colors">
-              <h3 className="font-bold text-slate-700 mb-2">
-                {def.type === 'customer_profile' ? '👤 客戶基本資料欄位' : '📅 預約表單填寫欄位'}
+            <div key={def.id} className="p-6 bg-slate-50 border border-slate-200 rounded-xl hover:border-blue-300 transition-all group">
+              <h3 className="font-bold text-slate-700 mb-2 flex items-center gap-2">
+                {def.type === 'customer_profile' ? <Users size={18} /> : <CalendarIcon size={18} />}
+                {def.type === 'customer_profile' ? '客戶基本資料欄位' : '預約表單填寫欄位'}
               </h3>
-              <p className="text-sm text-slate-500 mb-4">共有 {def.fields.length} 個欄位</p>
-              <button
-                onClick={() => setEditingDef(def)}
-                className="text-blue-600 text-sm font-semibold hover:underline"
-              >
-                編輯欄位
+              <p className="text-sm text-slate-500 mb-4">目前有 {def.fields.length} 個欄位 (含系統欄位)</p>
+              <button onClick={() => setEditingDef(def)} className="bg-white text-blue-600 border border-blue-200 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-600 hover:text-white transition-colors">
+                編輯所有欄位
               </button>
             </div>
           ))}
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="font-bold text-lg">正在編輯：{editingDef.type === 'customer_profile' ? '客戶資料' : '預約表單'}</h3>
-            <div className="space-x-2">
-              <button onClick={() => setEditingDef(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded">取消</button>
-              <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2">
+          <div className="flex justify-between items-center bg-blue-50 p-4 rounded-xl border border-blue-100">
+            <div>
+                <h3 className="font-bold text-blue-900">正在編輯：{editingDef.type === 'customer_profile' ? '客戶資料' : '預約表單'}</h3>
+                <p className="text-xs text-blue-700 mt-1 italic">系統欄位不可刪除，但您可以自訂標籤名稱。</p>
+            </div>
+            <div className="space-x-2 flex">
+              <button onClick={() => setEditingDef(null)} className="px-4 py-2 text-slate-600 hover:bg-white rounded-lg">取消</button>
+              <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 shadow-md">
                 <Save size={18} /> 儲存變更
               </button>
             </div>
           </div>
 
-          {/* 系統預設欄位顯示區 */}
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-             <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1">
-                <Lock size={12} /> 系統預設欄位 (不可修改)
-             </h4>
-             <div className="space-y-2">
-                {SYSTEM_FIELDS[editingDef.type]?.map((field, idx) => (
-                    <div key={idx} className="flex items-center gap-4 text-sm text-slate-600 bg-white p-2 rounded border border-slate-100 opacity-70">
-                        <span className="w-1/3 font-medium">{field.label}</span>
-                        <span className="w-1/3 bg-slate-100 px-2 py-0.5 rounded text-xs">{field.type}</span>
-                        <span className="w-1/3 flex items-center gap-1">
-                            {field.req && <span className="text-red-500 text-xs font-bold">* 必填</span>}
-                        </span>
-                    </div>
-                ))}
-             </div>
-          </div>
-
           <div className="space-y-4">
-            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">自定義欄位</h4>
-            {editingDef.fields.map((field, index) => (
-              <div key={field.id} className="flex gap-4 p-4 bg-slate-50 rounded-lg items-start">
+            {editingDef.fields.map((field: any, index) => (
+              <div key={field.id} className={`flex gap-4 p-4 rounded-xl border items-start shadow-sm transition-all ${field.isSystem ? 'bg-amber-50/30 border-amber-100' : 'bg-white border-slate-200'}`}>
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <input
-                    className="input-field"
-                    placeholder="標籤名稱"
-                    value={field.label}
-                    onChange={(e) => {
-                      const newFields = [...editingDef.fields];
-                      newFields[index].label = e.target.value;
-                      setEditingDef({ ...editingDef, fields: newFields });
-                    }}
-                  />
-                  <select
-                    className="input-field"
-                    value={field.type}
-                    onChange={(e) => {
-                      const newFields = [...editingDef.fields];
-                      newFields[index].type = e.target.value as any;
-                      setEditingDef({ ...editingDef, fields: newFields });
-                    }}
-                  >
-                    <option value="text">文字</option>
-                    <option value="number">數字</option>
-                    <option value="date">日期</option>
-                    <option value="tel">電話</option>
-                  </select>
-                  <label className="flex items-center gap-2 text-sm">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
+                        {field.isSystem && <Lock size={10} />} 顯示名稱 (Label)
+                    </label>
                     <input
-                      type="checkbox"
-                      checked={field.required}
-                      onChange={(e) => {
+                        className="input-field"
+                        placeholder="標籤名稱"
+                        value={field.label}
+                        onChange={(e) => {
                         const newFields = [...editingDef.fields];
-                        newFields[index].required = e.target.checked;
+                        newFields[index].label = e.target.value;
                         setEditingDef({ ...editingDef, fields: newFields });
-                      }}
+                        }}
                     />
-                    必填
-                  </label>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">欄位類型</label>
+                    <select
+                        className="input-field disabled:bg-slate-100 disabled:cursor-not-allowed"
+                        value={field.type}
+                        disabled={field.isSystem} // 系統欄位禁止改類型
+                        onChange={(e) => {
+                        const newFields = [...editingDef.fields];
+                        newFields[index].type = e.target.value as any;
+                        setEditingDef({ ...editingDef, fields: newFields });
+                        }}
+                    >
+                        <option value="text">文字</option>
+                        <option value="number">數字</option>
+                        <option value="date">日期</option>
+                        <option value="tel">電話</option>
+                        <option value="select">下拉選單</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col justify-end pb-2">
+                    <label className="flex items-center gap-2 text-sm font-medium text-slate-600 cursor-pointer">
+                        <input
+                        type="checkbox"
+                        className="w-4 h-4 text-blue-600 rounded"
+                        checked={field.required}
+                        onChange={(e) => {
+                            const newFields = [...editingDef.fields];
+                            newFields[index].required = e.target.checked;
+                            setEditingDef({ ...editingDef, fields: newFields });
+                        }}
+                        />
+                        必填欄位
+                    </label>
+                  </div>
                 </div>
-                <button
-                  onClick={() => {
-                    const newFields = editingDef.fields.filter((_, i) => i !== index);
-                    setEditingDef({ ...editingDef, fields: newFields });
-                  }}
-                  className="text-red-500 hover:bg-red-50 p-2 rounded"
-                >
-                  <Trash2 size={18} />
-                </button>
+                {!field.isSystem ? (
+                  <button
+                    onClick={() => {
+                      const newFields = editingDef.fields.filter((_, i) => i !== index);
+                      setEditingDef({ ...editingDef, fields: newFields });
+                    }}
+                    className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg mt-5"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                ) : (
+                  <div className="p-2 mt-5 text-amber-400" title="系統欄位不可刪除">
+                    <Lock size={18} />
+                  </div>
+                )}
               </div>
             ))}
           </div>
           <button
             onClick={addField}
-            className="w-full py-3 border-2 border-dashed border-slate-300 rounded-lg text-slate-500 hover:border-blue-400 hover:text-blue-500 flex items-center justify-center gap-2"
+            className="w-full py-4 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-all flex items-center justify-center gap-2 font-bold"
           >
-            <Plus size={20} /> 新增欄位
+            <Plus size={20} /> 新增自定義欄位
           </button>
         </div>
       )}
@@ -486,24 +447,27 @@ const SettingsManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold text-slate-800">系統與 Email 設定</h2>
-      <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg text-sm text-blue-700 mb-6">
-        提示：Email 通知功能需要設定 Gmail 帳號與「應用程式密碼」。請確保您已在 Google 帳號中開啟 2FA 並產生應用程式密碼。
+      <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+        <Settings className="text-blue-600" /> 系統與 Email 設定
+      </h2>
+      <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl text-sm text-blue-700 mb-6 flex gap-3">
+        <AlertCircle size={20} className="shrink-0" />
+        <div>提示：Email 通知功能需要設定 Gmail 帳號與「應用程式密碼」。請確保您已在 Google 帳號中開啟 2FA 並產生應用程式密碼。</div>
       </div>
       
       <div className="space-y-4 max-w-md">
-        <label className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg cursor-pointer">
+        <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl cursor-pointer border border-slate-100 hover:border-blue-200 transition-all">
           <input
             type="checkbox"
-            className="w-4 h-4 text-blue-600"
+            className="w-5 h-5 text-blue-600 rounded"
             checked={config.enabled}
             onChange={(e) => setConfig({ ...config, enabled: e.target.checked })}
           />
-          <span className="font-medium text-slate-700">啟用 Email 自動通知</span>
+          <span className="font-bold text-slate-700">啟用 Email 自動通知</span>
         </label>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">寄件者顯示名稱</label>
+          <label className="block text-sm font-bold text-slate-700 mb-2">寄件者顯示名稱</label>
           <input
             className="input-field"
             value={config.from_name}
@@ -513,7 +477,7 @@ const SettingsManager: React.FC = () => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Gmail 帳號 (Email)</label>
+          <label className="block text-sm font-bold text-slate-700 mb-2">Gmail 帳號 (Email)</label>
           <input
             className="input-field"
             value={config.user}
@@ -523,7 +487,7 @@ const SettingsManager: React.FC = () => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Gmail 應用程式密碼</label>
+          <label className="block text-sm font-bold text-slate-700 mb-2">Gmail 應用程式密碼</label>
           <input
             type="password"
             className="input-field"
@@ -533,8 +497,8 @@ const SettingsManager: React.FC = () => {
           />
         </div>
 
-        <button onClick={saveSettings} className="btn-primary w-full py-3 flex items-center justify-center gap-2">
-          <Save size={18} /> 儲存設定
+        <button onClick={saveSettings} className="btn-primary w-full py-4 flex items-center justify-center gap-2 shadow-lg shadow-blue-200 rounded-xl font-bold">
+          <Save size={18} /> 儲存全域設定
         </button>
       </div>
     </div>
@@ -552,7 +516,7 @@ const CustomerManager: React.FC = () => {
   const fetchCustomers = async () => {
     setLoading(true);
     const { data } = await supabase
-      .from('customers') // 改為讀取 customers 表
+      .from('customers') 
       .select('*')
       .order('created_at', { ascending: false });
     setCustomers(data || []);
@@ -563,7 +527,9 @@ const CustomerManager: React.FC = () => {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-slate-800 mb-6">客戶管理 (註冊會員)</h2>
+      <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+        <Users className="text-blue-600" /> 客戶管理 (註冊會員)
+      </h2>
       <div className="overflow-x-auto">
         <table className="w-full text-left">
           <thead>
