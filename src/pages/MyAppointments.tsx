@@ -95,11 +95,10 @@ export const MyAppointments: React.FC = () => {
                 </div>
               </Link>
               
-              {/* 取消按鈕 */}
               {(apt.status === 'pending' || apt.status === 'confirmed') && rules.allow_customer_cancel && (
                   <button 
-                    onClick={() => handleCancel(apt)}
-                    className="absolute top-8 right-24 p-3 text-slate-300 hover:text-red-500 transition-colors"
+                    onClick={(e) => { e.preventDefault(); handleCancel(apt); }}
+                    className="absolute top-8 right-24 p-3 text-slate-300 hover:text-red-500 transition-colors z-10"
                     title="取消預約"
                   >
                     <Trash2 size={20} />

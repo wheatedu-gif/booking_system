@@ -57,7 +57,6 @@ export const LandingTemplate: React.FC<LandingTemplateProps> = ({ content, isEdi
     <div className="bg-white selection:bg-blue-100">
       {/* Hero Section */}
       <section className="relative py-24 lg:py-32 overflow-hidden">
-        {/* 背景飾元 */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full -z-10 overflow-hidden pointer-events-none">
             <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-50 rounded-full blur-[120px] opacity-60"></div>
             <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] bg-indigo-50 rounded-full blur-[100px] opacity-60"></div>
@@ -65,10 +64,6 @@ export const LandingTemplate: React.FC<LandingTemplateProps> = ({ content, isEdi
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="text-center max-w-4xl mx-auto">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-blue-600 text-sm font-bold mb-8 animate-bounce">
-                🚀 全新升級 2.0 正式上線
-            </div>
-            
             <EditableText
                 as="h1"
                 className="text-5xl lg:text-7xl font-black text-slate-900 tracking-tight mb-8 leading-[1.1]"
