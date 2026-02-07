@@ -1,123 +1,71 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { LandingTemplate, DEFAULT_CONTENT, LandingContent } from '../components/cms/LandingTemplate';
-import { EditableText } from '../components/cms/EditableText';
-import { Save, Eye, RefreshCw } from 'lucide-react';
+import { Save, LayoutTemplate, FileText, Shield, Eye } from 'lucide-react';
+import { useToast } from '../components/Toast';
 
 export const WebsiteEditor: React.FC = () => {
-  const [content, setContent] = useState<LandingContent>(DEFAULT_CONTENT);
+  const { showToast } = useToast();
+  const [activeSubTab, setActiveSubTab] = useState<'content' | 'legal'>('content');
+  const [content, setContent] = useState<any>(null);
+  const [legal, setLegal] = useState({ terms: '', privacy: '' });
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
-    fetchContent();
+    const fetchData = async () => {
+      const { data: cData } = await supabase.from('page_content').select('*');
+      if (cData) {
+        cData.forEach(d => {
+          if (d.section_key === 'landing_page') setContent(d.content);
+          if (d.section_key === 'terms_and_privacy') setLegal(d.content);
+        });
+      }
+      setLoading(false);
+    };
+    fetchData();
   }, []);
 
-  const fetchContent = async () => {
-    setLoading(true);
-    const { data } = await supabase
-      .from('page_content')
-      .select('content')
-      .eq('section_key', 'landing_page')
-      .single();
-
-    if (data?.content) {
-      setContent(data.content);
-    }
-    setLoading(false);
-    setHasChanges(false);
+  const handleSaveContent = async () => {
+    const { error } = await supabase.from('page_content').upsert({ section_key: 'landing_page', content });
+    if (error) showToast('儲存失敗', 'error'); else showToast('內容已更新');
   };
 
-  const handleUpdate = (newContent: LandingContent) => {
-    setContent(newContent);
-    setHasChanges(true);
+  const handleSaveLegal = async () => {
+    const { error } = await supabase.from('page_content').upsert({ section_key: 'terms_and_privacy', content: legal });
+    if (error) showToast('儲存失敗', 'error'); else showToast('條款已更新');
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    const { error } = await supabase
-      .from('page_content')
-      .upsert({ 
-        section_key: 'landing_page', 
-        content: content 
-      });
-
-    if (error) {
-      alert('儲存失敗：' + error.message);
-    } else {
-      setHasChanges(false);
-      // alert('網站內容已更新！'); // 為了體驗流暢，可以選擇不跳 alert，或用 toast
-    }
-    setSaving(false);
-  };
-
-  if (loading) return <div className="p-8 text-center text-slate-500">載入編輯器中...</div>;
+  if (loading) return <div className="p-20 text-center">載入中...</div>;
 
   return (
-    <div className="relative min-h-screen bg-slate-100">
-      {/* 頂部工具列 */}
-      <div className="sticky top-0 z-50 bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm">
-        <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <Eye size={20} className="text-blue-600"/> 
-            首頁內容編輯器
-            <span className="text-xs font-normal text-slate-500 bg-slate-100 px-2 py-1 rounded-full">所見即所得模式</span>
-        </h2>
-        <div className="flex items-center gap-3">
-            {hasChanges && (
-                <span className="text-sm text-amber-600 font-medium animate-pulse">
-                    有未儲存的變更
-                </span>
-            )}
-            <button 
-                onClick={fetchContent}
-                disabled={saving || !hasChanges}
-                className="text-slate-500 hover:text-slate-700 p-2 rounded-lg hover:bg-slate-100 disabled:opacity-50"
-                title="重置變更"
-            >
-                <RefreshCw size={20} />
-            </button>
-            <button 
-                onClick={handleSave}
-                disabled={saving || !hasChanges}
-                className="btn-primary flex items-center gap-2 px-6 py-2 shadow-lg shadow-blue-200 disabled:opacity-50 disabled:shadow-none"
-            >
-                {saving ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                    <>
-                        <Save size={18} />
-                        儲存發布
-                    </>
-                )}
-            </button>
+    <div className="p-10 space-y-10 animate-in fade-in duration-500">
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3"><LayoutTemplate className="text-blue-600" /> 網站內容管理</h2>
+        <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+            <button onClick={() => setActiveSubTab('content')} className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'content' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>首頁內容</button>
+            <button onClick={() => setActiveSubTab('legal')} className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'legal' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>條款與隱私</button>
         </div>
       </div>
 
-      {/* 編輯區域 (模擬首頁外觀) */}
-      <div className="border-x border-slate-200 max-w-[100%] mx-auto bg-white min-h-[calc(100vh-80px)]">
-          <div className="bg-yellow-50 border-b border-yellow-200 p-2 text-center text-xs text-yellow-800">
-              提示：點擊任何文字即可開始編輯。編輯後請記得按右上角的「儲存發布」。
+      <div className="bg-slate-50 p-10 rounded-[3rem] border border-slate-100 max-w-4xl mx-auto">
+        {activeSubTab === 'content' ? (
+          <div className="space-y-8">
+            <div className="flex justify-between items-center"><div><h3 className="text-xl font-black text-slate-800">首頁文案編輯</h3><p className="text-xs text-slate-400 mt-1">修改品牌名稱與 Hero 區塊</p></div><button onClick={handleSaveContent} className="btn-primary px-8 py-3 rounded-2xl font-black shadow-lg"><Save size={18}/></button></div>
+            <div className="grid gap-6">
+                <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">品牌名稱 (Logo)</label><input className="input-field bg-white rounded-2xl py-4" value={content.brand_name} onChange={e => setContent({...content, brand_name: e.target.value})} /></div>
+                <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Hero 標題</label><input className="input-field bg-white rounded-2xl py-4" value={content.hero.title} onChange={e => setContent({...content, hero: { ...content.hero, title: e.target.value }})} /></div>
+                <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Hero 副標題</label><textarea rows={3} className="input-field bg-white rounded-2xl py-4" value={content.hero.subtitle} onChange={e => setContent({...content, hero: { ...content.hero, subtitle: e.target.value }})} /></div>
+            </div>
+            <div className="pt-6 text-center"><a href="/" target="_blank" className="text-blue-600 font-bold text-sm flex items-center justify-center gap-2 hover:underline"><Eye size={16}/> 預覽首頁效果</a></div>
           </div>
-
-          {/* 品牌名稱編輯區 (模擬 Navbar 位置) */}
-          <div className="bg-slate-50 border-b border-slate-100 px-8 py-4 flex items-center gap-4">
-              <span className="text-sm font-bold text-slate-400 uppercase tracking-wider">網站 Logo 文字:</span>
-              <div className="bg-white px-4 py-2 rounded-lg border border-blue-200 flex items-center gap-2">
-                  <EditableText 
-                    value={content.brand_name || '智慧預約'} 
-                    isEditing={true} 
-                    onSave={(val) => handleUpdate({ ...content, brand_name: val })}
-                    className="text-xl font-bold text-blue-600"
-                  />
-              </div>
+        ) : (
+          <div className="space-y-8">
+            <div className="flex justify-between items-center"><div><h3 className="text-xl font-black text-slate-800">服務條款與隱私政策</h3><p className="text-xs text-slate-400 mt-1">內容將顯示在註冊頁面的彈出視窗中</p></div><button onClick={handleSaveLegal} className="btn-primary px-8 py-3 rounded-2xl font-black shadow-lg"><Save size={18}/></button></div>
+            <div className="grid gap-8">
+                <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><FileText size={14}/> 服務條款內容</label><textarea rows={10} className="input-field bg-white rounded-2xl p-6 text-sm leading-relaxed" value={legal.terms} onChange={e => setLegal({...legal, terms: e.target.value})} placeholder="輸入您的服務條款..." /></div>
+                <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Shield size={14}/> 隱私權政策內容</label><textarea rows={10} className="input-field bg-white rounded-2xl p-6 text-sm leading-relaxed" value={legal.privacy} onChange={e => setLegal({...legal, privacy: e.target.value})} placeholder="輸入您的隱私權政策..." /></div>
+            </div>
           </div>
-
-          <LandingTemplate 
-            content={content} 
-            isEditing={true} 
-            onUpdate={handleUpdate} 
-          />
+        )}
       </div>
     </div>
   );
