@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, ShieldCheck, Bell, Edit2 } from 'lucide-react';
+import { Calendar, ShieldCheck, Bell, Edit2, ArrowRight } from 'lucide-react';
 import { EditableText } from './EditableText';
 import { DynamicIcon, IconPicker, IconName } from './IconPicker';
 
@@ -17,19 +17,13 @@ export interface LandingContent {
     desc: string;
     icon: string;
   }[];
-  about: {
-    title: string;
-    desc: string;
-    list: string[];
-  };
 }
 
-// 預設內容
 export const DEFAULT_CONTENT: LandingContent = {
   brand_name: '智慧預約',
   hero: {
     title: '簡單、快速、專業的 <span class="text-blue-600">預約管理系統</span>',
-    subtitle: '為您的客戶提供最流暢的預約體驗，同時讓您能輕鬆管理所有預約與客戶資料。支援自定義欄位、Email 自動通知與行事曆同步。',
+    subtitle: '為您的客戶提供最流暢的預約體驗，同時讓您能輕鬆管理所有預約。支援自定義欄位、Email 自動通知與行事曆同步。',
     cta_booking: '立即預約服務',
     cta_login: '會員登入'
   },
@@ -37,12 +31,7 @@ export const DEFAULT_CONTENT: LandingContent = {
     { title: '彈性預約流程', desc: '客戶可以輕鬆選擇時段，並填寫您自定義的預約欄位，滿足各種業務需求。', icon: 'calendar' },
     { title: '安全帳號管理', desc: '採用高規格加密與權限控管，確保客戶資料安全，並提供完整的個人化預約紀錄。', icon: 'shield' },
     { title: '即時 Email 通知', desc: '整合 Gmail SMTP，當預約成功或狀態變更時，系統會自動發送通知郵件。', icon: 'bell' }
-  ],
-  about: {
-    title: '強大的自定義欄位功能',
-    desc: '不需要寫程式，管理員就能直接在後台增減客戶資料欄位與預約填寫欄位。無論是電話、地址還是特殊需求，都能隨時調整。',
-    list: ['動態欄位定義', 'JSONB 結構儲存', '支援多種輸入類型', '必填項彈性設定']
-  }
+  ]
 };
 
 interface LandingTemplateProps {
@@ -55,32 +44,40 @@ export const LandingTemplate: React.FC<LandingTemplateProps> = ({ content, isEdi
   
   const updateContent = (path: string[], value: any) => {
     if (!onUpdate) return;
-    const newContent = JSON.parse(JSON.stringify(content)); // Deep copy
-    
-    // 簡單的 path 賦值邏輯
+    const newContent = JSON.parse(JSON.stringify(content));
     let current = newContent;
     for (let i = 0; i < path.length - 1; i++) {
       current = current[path[i]];
     }
     current[path[path.length - 1]] = value;
-    
     onUpdate(newContent);
   };
 
   return (
-    <div className="bg-white">
+    <div className="bg-white selection:bg-blue-100">
       {/* Hero Section */}
-      <section className="relative py-20 overflow-hidden">
+      <section className="relative py-24 lg:py-32 overflow-hidden">
+        {/* 背景飾元 */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full -z-10 overflow-hidden pointer-events-none">
+            <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-50 rounded-full blur-[120px] opacity-60"></div>
+            <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] bg-indigo-50 rounded-full blur-[100px] opacity-60"></div>
+        </div>
+
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <div className="text-center max-w-3xl mx-auto">
+          <div className="text-center max-w-4xl mx-auto">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-blue-600 text-sm font-bold mb-8 animate-bounce">
+                🚀 全新升級 2.0 正式上線
+            </div>
+            
             <EditableText
                 as="h1"
-                className="text-5xl font-extrabold text-slate-900 tracking-tight mb-6"
+                className="text-5xl lg:text-7xl font-black text-slate-900 tracking-tight mb-8 leading-[1.1]"
                 value={content.hero.title}
                 isEditing={isEditing}
                 onSave={(val) => updateContent(['hero', 'title'], val)}
             />
-            <div className="text-xl text-slate-600 mb-10 leading-relaxed">
+            
+            <div className="text-xl text-slate-500 mb-12 leading-relaxed max-w-2xl mx-auto font-medium">
                 <EditableText
                     as="p"
                     value={content.hero.subtitle}
@@ -90,15 +87,16 @@ export const LandingTemplate: React.FC<LandingTemplateProps> = ({ content, isEdi
                 />
             </div>
             
-            <div className="flex flex-col sm:flex-row justify-center gap-4">
-              <Link to="/booking" className="btn-primary py-4 px-8 text-lg rounded-xl shadow-lg shadow-blue-200">
+            <div className="flex flex-col sm:flex-row justify-center gap-6">
+              <Link to="/booking" className="group btn-primary py-5 px-10 text-lg rounded-2xl shadow-xl shadow-blue-200 flex items-center justify-center gap-2 transform transition-all hover:scale-105 active:scale-95">
                 <EditableText
                     value={content.hero.cta_booking}
                     isEditing={isEditing}
                     onSave={(val) => updateContent(['hero', 'cta_booking'], val)}
                 />
+                <ArrowRight className="group-hover:translate-x-1 transition-transform" size={20} />
               </Link>
-              <Link to="/login" className="bg-slate-100 hover:bg-slate-200 text-slate-700 py-4 px-8 text-lg rounded-xl font-medium transition-colors">
+              <Link to="/login" className="bg-slate-100 hover:bg-slate-200 text-slate-700 py-5 px-10 text-lg rounded-2xl font-bold transition-all flex items-center justify-center">
                 <EditableText
                     value={content.hero.cta_login}
                     isEditing={isEditing}
@@ -110,10 +108,10 @@ export const LandingTemplate: React.FC<LandingTemplateProps> = ({ content, isEdi
         </div>
       </section>
 
-      {/* Features */}
-      <section className="py-20 bg-slate-50">
+      {/* Features Section */}
+      <section className="py-24 bg-slate-50/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {content.features.map((feature, index) => (
               <FeatureCard
                 key={index}
@@ -146,22 +144,17 @@ const FeatureCard: React.FC<{
   const [showPicker, setShowPicker] = useState(false);
 
   return (
-    <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow relative">
-      <div className="mb-6 relative inline-block group">
-        <div className={`p-3 rounded-xl bg-blue-50 text-blue-600 ${isEditing ? 'cursor-pointer hover:bg-blue-100 transition-colors' : ''}`}
+    <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-slate-100 hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-500 relative group">
+      <div className="mb-8 relative inline-block">
+        <div className={`w-16 h-16 flex items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200 ${isEditing ? 'cursor-pointer hover:rotate-6 transition-transform' : ''}`}
              onClick={() => isEditing && setShowPicker(!showPicker)}>
           <DynamicIcon name={iconName} size={32} />
-          {isEditing && (
-            <div className="absolute -top-2 -right-2 bg-blue-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-              <Edit2 size={10} />
-            </div>
-          )}
         </div>
         
         {isEditing && showPicker && (
-          <div className="absolute top-full left-0 mt-2 z-50">
-            <div className="fixed inset-0" onClick={() => setShowPicker(false)}></div>
-            <div className="relative">
+          <div className="absolute top-full left-0 mt-4 z-50">
+            <div className="fixed inset-0 bg-transparent" onClick={() => setShowPicker(false)}></div>
+            <div className="relative animate-in fade-in zoom-in-95 duration-200">
               <IconPicker 
                 currentIcon={iconName} 
                 onSelect={(name) => {
@@ -176,12 +169,12 @@ const FeatureCard: React.FC<{
 
       <EditableText
           as="h3"
-          className="text-xl font-bold text-slate-900 mb-3"
+          className="text-2xl font-bold text-slate-800 mb-4"
           value={title}
           isEditing={isEditing}
           onSave={(val) => onUpdate(val, desc, iconName)}
       />
-      <div className="text-slate-600 leading-relaxed">
+      <div className="text-slate-500 leading-relaxed font-medium">
           <EditableText
               as="p"
               value={desc}
