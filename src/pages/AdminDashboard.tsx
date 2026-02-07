@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { FormDefinition, FormField, Appointment } from '../types';
-import { Plus, Trash2, Save, Settings, Users, Calendar as CalendarIcon, FormInput, Clock, LayoutTemplate, List, ChevronLeft, ChevronRight, Lock, AlertCircle, Download } from 'lucide-react';
+import { Plus, Trash2, Save, Settings, Users, Calendar as CalendarIcon, FormInput, Clock, LayoutTemplate, List, ChevronLeft, ChevronRight, Lock, AlertCircle, Download, Send } from 'lucide-react';
 import { AvailabilitySettings } from './AvailabilitySettings';
 import { WebsiteEditor } from './WebsiteEditor';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO } from 'date-fns';
@@ -218,7 +218,43 @@ const FormManager: React.FC<{ formDefs: FormDefinition[], onRefresh: () => void 
 
 const SettingsManager: React.FC = () => {
   const [config, setConfig] = useState({ enabled: false, user: '', pass: '', from_name: '' });
-  useEffect(() => { supabase.from('system_settings').select('*').eq('key', 'email_config').maybeSingle().then(({ data }) => data && setConfig(data.value)); }, []);
+  const [testing, setTesting] = useState(false);
+
+  useEffect(() => {
+    supabase.from('system_settings').select('*').eq('key', 'email_config').maybeSingle()
+      .then(({ data }) => data && setConfig(data.value));
+  }, []);
+
+  const saveSettings = async () => {
+    await supabase.from('system_settings').upsert({ key: 'email_config', value: config });
+    alert('設定已儲存');
+  };
+
+  const handleTestEmail = async () => {
+    if (!config.user || !config.pass) {
+        alert('請先填寫 Gmail 帳號與密碼');
+        return;
+    }
+    setTesting(true);
+    try {
+        // 先儲存設定，確保 Edge Function 讀到最新的
+        await supabase.from('system_settings').upsert({ key: 'email_config', value: config });
+        
+        const { data, error } = await supabase.functions.invoke('notify', {
+            body: { type: 'test', target_email: config.user } // 寄給自己測試
+        });
+
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        
+        alert(`測試信已發送至 ${config.user}！\n請檢查您的收件匣 (或垃圾郵件)。`);
+    } catch (err: any) {
+        alert('測試失敗：' + err.message);
+    } finally {
+        setTesting(false);
+    }
+  };
+
   return (
     <div className="space-y-8 max-w-lg">
       <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3"><Settings className="text-blue-600" />自動通知系統設定</h2>
@@ -227,10 +263,18 @@ const SettingsManager: React.FC = () => {
             <input type="checkbox" className="w-6 h-6 text-blue-600 rounded-lg" checked={config.enabled} onChange={e => setConfig({...config, enabled: e.target.checked})} />
             <div className="flex-1"><div className="font-bold text-slate-700">啟用自動 Email 發送</div><div className="text-xs text-slate-400">當預約提交、確認或取消時自動通知</div></div>
         </label>
-        <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">發件者顯示名稱</label><input className="input-field bg-white" placeholder="例如：智慧預約客服中心" value={config.from_name} onChange={e => setConfig({...config, from_name: e.target.value})} /></div>
+        <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">寄件者顯示名稱</label><input className="input-field bg-white" placeholder="例如：智慧預約客服中心" value={config.from_name} onChange={e => setConfig({...config, from_name: e.target.value})} /></div>
         <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Gmail 帳號 (Email)</label><input className="input-field bg-white" placeholder="xxx@gmail.com" value={config.user} onChange={e => setConfig({...config, user: e.target.value})} /></div>
         <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Gmail 應用程式密碼</label><input type="password" placeholder="16 位數應用程式密碼" className="input-field bg-white" value={config.pass} onChange={e => setConfig({...config, pass: e.target.value})} /></div>
-        <button onClick={async () => { await supabase.from('system_settings').upsert({key: 'email_config', value: config}); alert('Email 設定已生效'); }} className="btn-primary w-full py-4 font-bold shadow-lg shadow-blue-200 rounded-2xl text-lg">儲存並啟用設定</button>
+        
+        <div className="flex gap-3 pt-2">
+            <button onClick={handleTestEmail} disabled={testing} className="flex-1 bg-white text-slate-600 border-2 border-slate-200 py-4 rounded-2xl font-bold hover:bg-slate-50 hover:text-blue-600 flex items-center justify-center gap-2 transition-all">
+                {testing ? '發送中...' : <><Send size={18} /> 發送測試信</>}
+            </button>
+            <button onClick={saveSettings} className="flex-1 btn-primary py-4 font-bold shadow-lg shadow-blue-200 rounded-2xl text-lg flex items-center justify-center gap-2">
+                <Save size={18} /> 儲存設定
+            </button>
+        </div>
       </div>
     </div>
   );
