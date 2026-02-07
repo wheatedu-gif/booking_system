@@ -36,6 +36,7 @@ export const BookingPage: React.FC = () => {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
   };
 
+  // 封裝查詢佔用邏輯
   const fetchOccupied = useCallback(async (targetDate: string) => {
     if (!targetDate) return;
     const { data } = await supabase
@@ -51,15 +52,6 @@ export const BookingPage: React.FC = () => {
     }) || [];
     setOccupiedIntervals(intervals);
   }, [bookingRules]);
-
-  // 優化重置邏輯
-  const handleReset = async () => {
-    setSuccessId(null);
-    setBookingTime('');
-    setFormData({});
-    // 強制再次查詢資料庫，確保獲取最新佔用狀態
-    await fetchOccupied(bookingDate);
-  };
 
   useEffect(() => {
     if (!authLoading && !customer) navigate('/login');
@@ -140,11 +132,11 @@ export const BookingPage: React.FC = () => {
       }]).select().single();
       if (aptError) throw aptError;
       
-      // 觸發通知
+      // 先觸發 Email
       await sendNotification(aptData.id, 'new');
       
-      // 成功後立即刷新本地佔用狀態
-      await fetchOccupied(bookingDate); 
+      // 成功後立即重新查詢佔用狀態
+      await fetchOccupied(bookingDate);
       
       setSuccessId(aptData.id);
     } catch (err: any) { alert('預約失敗：' + err.message); }
@@ -162,8 +154,13 @@ export const BookingPage: React.FC = () => {
         <h2 className="text-3xl font-bold text-slate-800 mb-3">預約已提交！</h2>
         <p className="text-slate-600 mb-8 text-lg">感謝您的預約，<span className="font-semibold">{customer?.full_name}</span>。</p>
         <div className="space-y-4">
-          <button onClick={handleReset} className="w-full btn-primary py-4 text-lg font-bold shadow-lg shadow-blue-200">再次預約</button>
-          <button onClick={() => navigate('/my-appointments')} className="w-full py-3 text-slate-500 font-medium hover:bg-slate-50 rounded-lg border">查看預約紀錄</button>
+          <button onClick={() => { 
+              setSuccessId(null); 
+              setBookingTime(''); 
+              setFormData({});
+              fetchOccupied(bookingDate); // 點擊再次預約時，再次強制刷新
+          }} className="w-full btn-primary py-4 text-lg font-bold shadow-lg shadow-blue-200">再次預約</button>
+          <button onClick={() => navigate('/my-appointments')} className="w-full py-3 text-slate-500 font-medium hover:bg-slate-50 rounded-lg border border-slate-200">查看預約紀錄</button>
         </div>
       </div>
     );
@@ -196,28 +193,20 @@ export const BookingPage: React.FC = () => {
                 <select className="input-field" value={bookingTime} onChange={(e) => setBookingTime(e.target.value)}>
                   {availableSlots.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
-              ) : <div className="text-red-500 text-sm mt-2 p-2 bg-red-50 rounded border border-red-100">本日已無可用時段</div>}
+              ) : <div className="text-red-500 text-sm mt-2 p-2 bg-red-50 rounded border border-red-100 font-bold">本日已無可用時段</div>}
             </div>
           </div>
-            {bookingDef?.fields?.filter((f:any) => !f.isSystem).map((field: any) => (
-              <div key={field.id} className="mt-4">
-                <label className="block text-sm font-medium text-slate-700 mb-1">{field.label} {field.required && <span className="text-red-500">*</span>}</label>
-                {field.type === 'select' ? (
-                  <select 
-                    required={field.required} 
-                    className="input-field" 
-                    onChange={(e) => setFormData({ ...formData, [field.label]: e.target.value })}
-                  >
-                    <option value="">請選擇...</option>
-                    {field.options?.map((opt: string) => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input type={field.type} required={field.required} className="input-field" onChange={(e) => setFormData({ ...formData, [field.label]: e.target.value })} />
-                )}
-              </div>
-            ))}
+          {bookingDef?.fields?.filter((f:any) => !f.isSystem).map((field: any) => (
+            <div key={field.id} className="mt-4">
+              <label className="block text-sm font-medium text-slate-700 mb-1">{field.label} {field.required && <span className="text-red-500">*</span>}</label>
+              {field.type === 'select' ? (
+                <select required={field.required} className="input-field" onChange={(e) => setFormData({ ...formData, [field.label]: e.target.value })}>
+                  <option value="">請選擇...</option>
+                  {field.options?.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              ) : <input type={field.type} required={field.required} className="input-field" onChange={(e) => setFormData({ ...formData, [field.label]: e.target.value })} />}
+            </div>
+          ))}
           <button type="submit" disabled={submitting} className="w-full btn-primary py-4 text-xl font-bold shadow-lg shadow-blue-200 mt-8">
             {submitting ? '提交預約中...' : '確認送出預約'}
           </button>
