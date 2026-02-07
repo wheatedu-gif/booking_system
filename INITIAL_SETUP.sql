@@ -1,5 +1,5 @@
 -- =========================================================
--- 智慧預約系統 - 終極全功能整合初始化腳本 (V4 自動同步版)
+-- 智慧預約系統 - 最終全功能整合初始化腳本 (V5 完整整合版)
 -- =========================================================
 
 -- 0. 環境與擴充功能
@@ -50,7 +50,7 @@ CREATE TABLE appointments (
   customer_id UUID REFERENCES customers(id) ON DELETE CASCADE,
   booking_date DATE NOT NULL,
   booking_time TIME NOT NULL,
-  status TEXT DEFAULT 'pending',
+  status TEXT DEFAULT 'pending', -- pending, confirmed, cancelled
   booking_data JSONB DEFAULT '{}'::jsonb,
   cancellation_reason TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -67,7 +67,7 @@ CREATE TABLE page_content (
 -- [表單定義表]
 CREATE TABLE form_definitions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  type TEXT NOT NULL,
+  type TEXT NOT NULL, -- 'customer_profile', 'booking_form'
   fields JSONB NOT NULL DEFAULT '[]'::jsonb,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -98,7 +98,7 @@ CREATE TABLE system_settings (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. 設定 RLS 安全政策 (簡化版：Auth 登入者即為 Admin)
+-- 3. 設定 RLS 安全政策
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
@@ -108,22 +108,22 @@ ALTER TABLE business_hours ENABLE ROW LEVEL SECURITY;
 ALTER TABLE special_dates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY;
 
--- 只要登入 Supabase Auth 就能讀寫管理員相關表格 (因為只有管理員會用到 Auth)
-CREATE POLICY "Admin Access" ON profiles FOR ALL USING (auth.role() = 'authenticated');
+-- 只要登入 Supabase Auth 就能管理所有後台資料
+CREATE POLICY "Admin Access All" ON profiles FOR ALL USING (auth.role() = 'authenticated');
 CREATE POLICY "Admin Access Customers" ON customers FOR ALL USING (auth.role() = 'authenticated');
 CREATE POLICY "Admin Access Appointments" ON appointments FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Admin Access CMS" ON page_content FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Admin Access Content" ON page_content FOR ALL USING (auth.role() = 'authenticated');
 CREATE POLICY "Admin Access Forms" ON form_definitions FOR ALL USING (auth.role() = 'authenticated');
 CREATE POLICY "Admin Access Business" ON business_hours FOR ALL USING (auth.role() = 'authenticated');
 CREATE POLICY "Admin Access Special" ON special_dates FOR ALL USING (auth.role() = 'authenticated');
 CREATE POLICY "Admin Access Settings" ON system_settings FOR ALL USING (auth.role() = 'authenticated');
 
--- 公開讀取 (預約頁面用)
-CREATE POLICY "Public Read" ON page_content FOR SELECT USING (true);
+-- 前台公開讀取
+CREATE POLICY "Public Read Content" ON page_content FOR SELECT USING (true);
 CREATE POLICY "Public Read Forms" ON form_definitions FOR SELECT USING (true);
 CREATE POLICY "Public Read Business" ON business_hours FOR SELECT USING (true);
 CREATE POLICY "Public Read Special" ON special_dates FOR SELECT USING (true);
-CREATE POLICY "Public View Appointment" ON appointments FOR SELECT USING (true);
+CREATE POLICY "Public View Appointments" ON appointments FOR SELECT USING (true);
 CREATE POLICY "Public Create Appointment" ON appointments FOR INSERT WITH CHECK (true);
 
 
@@ -155,7 +155,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 自動同步未來新註冊的 Auth 使用者
 CREATE OR REPLACE FUNCTION handle_new_admin_user() RETURNS trigger AS $$
 BEGIN
   INSERT INTO public.profiles (id, email, full_name, role)
@@ -170,6 +169,7 @@ CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXEC
 
 -- 5. 初始化預設資料
 
+-- 包含 isSystem 標記的表單定義
 INSERT INTO form_definitions (type, fields) VALUES 
 ('customer_profile', '[{"id": "sys_name", "name": "full_name", "label": "姓名", "type": "text", "required": true, "isSystem": true}, {"id": "sys_email", "name": "email", "label": "電子郵件", "type": "text", "required": true, "isSystem": true}, {"id": "sys_phone", "name": "phone", "label": "聯絡電話", "type": "tel", "required": false, "isSystem": true}]'::jsonb),
 ('booking_form', '[{"id": "sys_date", "name": "date", "label": "預約日期", "type": "date", "required": true, "isSystem": true}, {"id": "sys_time", "name": "time", "label": "預約時間", "type": "text", "required": true, "isSystem": true}]'::jsonb);
@@ -200,7 +200,7 @@ INSERT INTO page_content (section_key, content) VALUES
 }
 $$);
 
--- 6. 【核心修復】自動同步現有的所有 Auth 帳號到 profiles 表
+-- 自動同步現有管理員
 INSERT INTO public.profiles (id, email, full_name, role)
 SELECT id, email, COALESCE(raw_user_meta_data->>'full_name', 'Administrator'), 'admin'
 FROM auth.users
