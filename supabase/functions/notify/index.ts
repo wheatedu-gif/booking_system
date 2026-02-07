@@ -1,3 +1,7 @@
+// ---------------------------------------------------------
+// Supabase Edge Function: notify (最終穩定版 - 解決亂碼與 500 錯誤)
+// ---------------------------------------------------------
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts"
@@ -7,7 +11,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-function encodeBase64(str: string): string {
+function encodeHeader(str: string): string {
+  if (/^[\x00-\x7F]*$/.test(str)) return str;
   const encoder = new TextEncoder();
   const data = encoder.encode(str);
   let binary = "";
@@ -33,26 +38,26 @@ serve(async (req) => {
 
     let toEmail = ''
     let subject = ''
-    let htmlContent = ''
+    let html = ''
 
     if (type === 'test') {
       toEmail = (target_email || config.user).trim()
-      subject = '預約系統：測試信發送成功'
-      htmlContent = `<h3>🎉 測試成功！</h3><p>您的發信功能已經可以正常運作。</p><p>時間：${new Date().toLocaleString()}</p>`
+      subject = '預約系統：發信功能測試成功'
+      html = `<h3>🎉 恭喜！測試信發送成功</h3><p>這代表您的 Gmail SMTP 與主旨編碼均已正確運作。</p><p>時間：${new Date().toLocaleString()}</p>`
     } else {
       const { data: apt } = await supabaseClient.from('appointments').select('*, customers(email, full_name)').eq('id', record_id).single()
-      if (!apt) throw new Error("找不到預約資料")
+      if (!apt) throw new Error("Appointment not found")
       toEmail = apt.customers.email.trim()
       const details = `<br>日期：${apt.booking_date}<br>時間：${apt.booking_time.slice(0,5)}`
       if (type === 'new') {
         subject = '已收到您的預約申請'
-        htmlContent = `您好 ${apt.customers.full_name}，已收到預約，待確認中。${details}`
+        html = `您好 ${apt.customers.full_name}，我們已收到您的預約申請，待確認中。${details}`
       } else if (type === 'update' && apt.status === 'confirmed') {
-        subject = '您的預約已確認成功'
-        htmlContent = `您好 ${apt.customers.full_name}，預約已確認！${details}`
+        subject = '預約確認成功通知'
+        html = `您好 ${apt.customers.full_name}，您的預約已確認成功！${details}`
       } else if (type === 'cancel') {
         subject = '預約取消通知'
-        htmlContent = `您好 ${apt.customers.full_name}，預約已取消。原因：${apt.cancellation_reason || '無'}${details}`
+        html = `您好 ${apt.customers.full_name}，預約已取消。原因：${apt.cancellation_reason || '無'}${details}`
       }
     }
 
@@ -68,8 +73,8 @@ serve(async (req) => {
     await client.send({
       from: config.user.trim(),
       to: toEmail,
-      subject: encodeBase64(subject),
-      html: `<html><body style="font-family: sans-serif;">${htmlContent}</body></html>`,
+      subject: encodeHeader(subject),
+      html: `<html><body style="font-family: sans-serif; color: #334155;">${html}</body></html>`,
     })
 
     await client.close()
