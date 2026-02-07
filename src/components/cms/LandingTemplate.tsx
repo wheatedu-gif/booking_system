@@ -132,54 +132,6 @@ export const LandingTemplate: React.FC<LandingTemplateProps> = ({ content, isEdi
           </div>
         </div>
       </section>
-
-      {/* Dynamic Fields Section */}
-      <section className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row items-center gap-16">
-            <div className="flex-1">
-              <EditableText
-                  as="h2"
-                  className="text-3xl font-bold text-slate-900 mb-6"
-                  value={content.about.title}
-                  isEditing={isEditing}
-                  onSave={(val) => updateContent(['about', 'title'], val)}
-              />
-              <div className="text-lg text-slate-600 mb-6">
-                <EditableText
-                    as="p"
-                    value={content.about.desc}
-                    multiline
-                    isEditing={isEditing}
-                    onSave={(val) => updateContent(['about', 'desc'], val)}
-                />
-              </div>
-              <ul className="space-y-4">
-                {content.about.list.map((item, index) => (
-                  <li key={index} className="flex items-center gap-2 font-medium text-slate-700">
-                    <div className="h-2 w-2 bg-blue-600 rounded-full flex-shrink-0"></div>
-                    <EditableText
-                        value={item}
-                        isEditing={isEditing}
-                        onSave={(val) => updateContent(['about', 'list', index.toString()], val)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="flex-1 bg-blue-50 p-8 rounded-3xl border border-blue-100">
-               <div className="bg-white p-6 rounded-xl shadow-sm space-y-4 opacity-80 pointer-events-none select-none">
-                  {/* Mock UI */}
-                  <div className="h-4 w-1/3 bg-slate-100 rounded"></div>
-                  <div className="h-10 w-full bg-slate-50 border border-slate-200 rounded"></div>
-                  <div className="h-4 w-1/4 bg-slate-100 rounded"></div>
-                  <div className="h-10 w-full bg-slate-50 border border-slate-200 rounded"></div>
-                  <div className="h-12 w-full bg-blue-600 rounded"></div>
-               </div>
-            </div>
-          </div>
-        </div>
-      </section>
     </div>
   );
 };
