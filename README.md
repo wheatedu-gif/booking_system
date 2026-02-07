@@ -36,7 +36,7 @@
 1.  登入 [Supabase Dashboard](https://supabase.com/) 並建立一個新專案。
 2.  進入專案的 **SQL Editor**。
 3.  點擊 **New Query**。
-4.  複製本專案根目錄下的 `FINAL_SETUP_V2.sql` 檔案內容。
+4.  複製本專案根目錄下的 `INITIAL_SETUP.sql` 檔案內容。
 5.  貼上並點擊 **Run** 執行。這將會自動建立所有資料表、函數與權限設定。
 6.  (重要) 設定您的第一位管理員：
     *   前往 **Authentication** > **Users**，手動新增一個使用者（這將是您的管理員帳號）。
@@ -114,4 +114,4 @@
 *   `/src/pages`: 所有頁面 (Landing, Booking, Admin...)
 *   `/src/components`: 共用元件 (Navbar, CMS Templates...)
 *   `/src/hooks`: 自定義 Hooks (useAuth, useCustomer)
-*   `FINAL_SETUP_V2.sql`: 資料庫完整初始化腳本
+*   `INITIAL_SETUP.sql`: 資料庫完整初始化腳本
