@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useCustomer } from '../hooks/useCustomer';
 import { FormDefinition } from '../types';
@@ -11,25 +11,52 @@ export const BookingPage: React.FC = () => {
   const { customer, loading: authLoading, logout } = useCustomer();
   const navigate = useNavigate();
 
-  // 基礎預約資訊
   const [bookingDate, setBookingDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [bookingTime, setBookingTime] = useState('');
   
-  // 動態時段邏輯
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [businessHours, setBusinessHours] = useState<any[]>([]);
   const [specialDates, setSpecialDates] = useState<any[]>([]);
   const [bookingRules, setBookingRules] = useState({ time_slot_minutes: 60, booking_window_days: 30 });
-  const [occupiedIntervals, setOccupiedIntervals] = useState<{start: number, end: number}[]>([]); // 佔用區間
+  const [occupiedIntervals, setOccupiedIntervals] = useState<{start: number, end: number}[]>([]);
 
-  // 表單欄位定義
   const [bookingDef, setBookingDef] = useState<FormDefinition | null>(null);
-  
-  // 填寫的資料
   const [formData, setFormData] = useState<Record<string, any>>({});
-
   const [submitting, setSubmitting] = useState(false);
   const [successId, setSuccessId] = useState<string | null>(null);
+
+  // 1. 定義 helper functions
+  const parseTime = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m;
+  };
+
+  const formatTime = (minutes: number) => {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+  };
+
+  // 2. 獨立出 fetchOccupied 函式
+  const fetchOccupied = useCallback(async () => {
+    if (!bookingDate) return;
+    
+    // 查詢當天所有非 'cancelled' 的預約
+    const { data } = await supabase
+        .from('appointments')
+        .select('booking_time')
+        .eq('booking_date', bookingDate)
+        .neq('status', 'cancelled'); 
+    
+    const serviceDuration = bookingRules.time_slot_minutes || 60;
+    
+    const intervals = data?.map(d => {
+        const startMin = parseTime(d.booking_time.slice(0, 5));
+        return { start: startMin, end: startMin + serviceDuration };
+    }) || [];
+    
+    setOccupiedIntervals(intervals);
+  }, [bookingDate, bookingRules]);
 
   const getMaxDateStr = () => {
     try {
@@ -44,19 +71,16 @@ export const BookingPage: React.FC = () => {
 
   const maxDateStr = getMaxDateStr();
 
+  // 3. 初始化與依賴
   useEffect(() => {
-    if (!authLoading && !customer) {
-      navigate('/login');
-    }
+    if (!authLoading && !customer) navigate('/login');
   }, [customer, authLoading, navigate]);
 
   useEffect(() => {
     const fetchAll = async () => {
       try {
         const { data: defs } = await supabase.from('form_definitions').select('*');
-        if (defs) {
-          setBookingDef(defs.find(d => d.type === 'booking_form') || null);
-        }
+        if (defs) setBookingDef(defs.find(d => d.type === 'booking_form') || null);
         
         const { data: hours } = await supabase.from('business_hours').select('*');
         if (hours) setBusinessHours(hours);
@@ -67,60 +91,27 @@ export const BookingPage: React.FC = () => {
         const { data: rules } = await supabase.from('system_settings').select('value').eq('key', 'booking_rules').maybeSingle();
         if (rules?.value) setBookingRules(rules.value);
       } catch (e) {
-        console.error('Error fetching configuration:', e);
+        console.error('Error:', e);
       }
     };
     fetchAll();
   }, []);
 
-  // 當日期或規則改變時，查詢佔用狀況
+  // 觸發重新查詢
   useEffect(() => {
-    const fetchOccupied = async () => {
-        if (!bookingDate) return;
-        
-        // 查詢當天所有非 'cancelled' 的預約
-        const { data } = await supabase
-            .from('appointments')
-            .select('booking_time')
-            .eq('booking_date', bookingDate)
-            .neq('status', 'cancelled'); 
-        
-        const serviceDuration = bookingRules.time_slot_minutes || 60;
-        
-        // 將預約時間轉換為分鐘區間 [start, end]
-        const intervals = data?.map(d => {
-            const startMin = parseTime(d.booking_time.slice(0, 5));
-            return { start: startMin, end: startMin + serviceDuration };
-        }) || [];
-        
-        setOccupiedIntervals(intervals);
-    };
-
     fetchOccupied();
-  }, [bookingDate, bookingRules]);
+  }, [fetchOccupied]);
 
-  // 計算可用時段
+  // 計算時段
   useEffect(() => {
     if (bookingDate && businessHours.length > 0) {
       generateTimeSlots(bookingDate);
     }
   }, [bookingDate, businessHours, specialDates, bookingRules, occupiedIntervals]);
 
-  const parseTime = (t: string) => {
-    const [h, m] = t.split(':').map(Number);
-    return h * 60 + m;
-  };
-
-  const formatTime = (minutes: number) => {
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-  };
-
   const generateTimeSlots = (dateStr: string) => {
     const dateObj = new Date(dateStr);
     const dayOfWeek = dateObj.getDay();
-
     const special = specialDates.find(d => d.date === dateStr);
     
     if (special && special.is_closed) {
@@ -131,8 +122,8 @@ export const BookingPage: React.FC = () => {
 
     let start = '09:00';
     let end = '18:00';
-    let breakStart = null;
-    let breakEnd = null;
+    let bStart = -1;
+    let bEnd = -1;
 
     if (special) {
       start = special.start_time || start;
@@ -146,15 +137,15 @@ export const BookingPage: React.FC = () => {
       }
       start = regular.start_time;
       end = regular.end_time;
-      breakStart = regular.break_start;
-      breakEnd = regular.break_end;
+      if (regular.break_start && regular.break_end) {
+          bStart = parseTime(regular.break_start);
+          bEnd = parseTime(regular.break_end);
+      }
     }
 
     const slots: string[] = [];
     let current = parseTime(start);
     const endTime = parseTime(end);
-    const bStart = breakStart ? parseTime(breakStart) : -1;
-    const bEnd = breakEnd ? parseTime(breakEnd) : -1;
     const step = bookingRules.time_slot_minutes || 60;
 
     let count = 0;
@@ -162,23 +153,17 @@ export const BookingPage: React.FC = () => {
       count++;
       const currentEnd = current + step;
 
-      // 午休檢查 (與午休區間重疊則跳過)
-      // 區間A: [current, currentEnd], 區間B: [bStart, bEnd]
-      // 重疊條件: current < bEnd && currentEnd > bStart
+      // 午休檢查
       if (bStart !== -1 && bEnd !== -1) {
           if (current < bEnd && currentEnd > bStart) {
-             // 遇到午休，移動到午休結束時間
-             // 如果 current 已經大於等於 bEnd (邏輯上不可能，因為上面的條件)，則加 step
              if (current < bEnd) current = bEnd;
              else current += step;
              continue;
           }
       }
       
-      // 確保時段完全在營業時間內
       if (currentEnd <= endTime) {
-         // **關鍵：檢查是否與已預約區間重疊**
-         // 重疊條件: current < interval.end && currentEnd > interval.start
+         // 佔用檢查
          const isOccupied = occupiedIntervals.some(interval => {
              return current < interval.end && currentEnd > interval.start;
          });
@@ -187,12 +172,13 @@ export const BookingPage: React.FC = () => {
              slots.push(formatTime(current));
          }
       }
-      
       current += step; 
     }
     
     setAvailableSlots(slots);
     if (slots.length > 0) {
+      // 只有當目前選的時間 "不在" 新的可用列表內時，才重置為第一個
+      // 這樣可以避免使用者只是切換日期時，如果該時間剛好有空，就被強制換掉
       if (!bookingTime || !slots.includes(bookingTime)) {
         setBookingTime(slots[0]);
       }
@@ -203,11 +189,7 @@ export const BookingPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customer) return;
-    if (!bookingTime) {
-      alert('請選擇預約時段');
-      return;
-    }
+    if (!customer || !bookingTime) return;
     setSubmitting(true);
 
     try {
@@ -224,6 +206,9 @@ export const BookingPage: React.FC = () => {
       if (aptError) throw aptError;
 
       await sendNotification(aptData.id, 'new');
+      
+      // 關鍵修正：預約成功後，立刻重新抓取佔用時段
+      await fetchOccupied();
 
       setSuccessId(aptData.id);
     } catch (err: any) {
@@ -237,14 +222,16 @@ export const BookingPage: React.FC = () => {
     if (!bookingTime) return '#';
     const start = `${bookingDate.replace(/-/g, '')}T${bookingTime.replace(/:/g, '')}00`;
     const [h, m] = bookingTime.split(':').map(Number);
-    // 計算結束時間 (根據設定的時長)
     const duration = bookingRules.time_slot_minutes || 60;
     const endTotalMinutes = h * 60 + m + duration;
     const endH = Math.floor(endTotalMinutes / 60);
     const endM = endTotalMinutes % 60;
-    
     const end = `${bookingDate.replace(/-/g, '')}T${endH.toString().padStart(2, '0')}${endM.toString().padStart(2, '0')}00`;
     return `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('預約服務')}&dates=${start}/${end}&details=${encodeURIComponent('預約人: ' + customer?.full_name)}&sf=true&output=xml`;
+  };
+
+  const getLabel = (name: string, defaultLabel: string) => {
+    return bookingDef?.fields?.find((f: any) => f.name === name)?.label || defaultLabel;
   };
 
   if (authLoading) return <div className="p-12 text-center">載入中...</div>;
@@ -257,16 +244,17 @@ export const BookingPage: React.FC = () => {
         <p className="text-slate-600 mb-8 text-lg">感謝您的預約，<span className="font-semibold">{customer?.full_name}</span>。</p>
         <div className="space-y-4">
           <a href={getGoogleCalendarUrl()} target="_blank" rel="noopener noreferrer" className="w-full btn-primary flex items-center justify-center gap-2 py-4 text-lg"><ExternalLink size={20} /> 加入 Google 行事曆</a>
-          <button onClick={() => { setSuccessId(null); navigate('/booking'); }} className="w-full py-3 text-slate-500 font-medium hover:bg-slate-50 rounded-lg">再次預約</button>
+          <button onClick={() => { 
+              setSuccessId(null); 
+              // 點擊再次預約時，不需要 reload，因為 fetchOccupied 已經在 handleSubmit 跑過了
+              // 但為了保險，這裡也可以再跑一次，或者簡單地重置 bookingTime
+              setBookingTime('');
+              navigate('/booking'); 
+          }} className="w-full py-3 text-slate-500 font-medium hover:bg-slate-50 rounded-lg">再次預約</button>
         </div>
       </div>
     );
   }
-
-  // 取得特定系統欄位的標籤
-  const getLabel = (name: string, defaultLabel: string) => {
-    return bookingDef?.fields?.find((f: any) => f.name === name)?.label || defaultLabel;
-  };
 
   return (
     <div className="max-w-3xl mx-auto py-12 px-4">
@@ -300,7 +288,6 @@ export const BookingPage: React.FC = () => {
               </div>
             </div>
 
-            {/* 其他自定義欄位 */}
             {bookingDef?.fields?.filter((f:any) => !f.isSystem).map((field: any) => (
               <div key={field.id} className="mt-4">
                 <label className="block text-sm font-medium text-slate-700 mb-1">{field.label} {field.required && <span className="text-red-500">*</span>}</label>

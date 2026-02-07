@@ -32,6 +32,7 @@ export interface Appointment {
   booking_time: string;
   status: 'pending' | 'confirmed' | 'cancelled';
   booking_data: Record<string, any>;
+  cancellation_reason?: string; // 新增此欄位
   created_at: string;
   profiles?: Profile;
 }
