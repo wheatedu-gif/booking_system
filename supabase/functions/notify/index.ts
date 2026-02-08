@@ -53,6 +53,8 @@ serve(async (req) => {
       const { data: apt } = await supabase.from('appointments').select('*, customers(*), service_items(name)').eq('id', record_id).single();
       if (!apt) throw new Error("Apt not found");
       toEmail = apt.customers.email.trim();
+      const si = apt.service_items ?? apt.service_item;
+      const serviceName = (si && typeof si === 'object' && si.name) ? String(si.name) : '—';
       
       let tplKey = 'new_booking';
       if (apt.status === 'confirmed') tplKey = 'confirmed';
@@ -67,10 +69,10 @@ serve(async (req) => {
         .join('\n');
 
       const replaceVars = (t: string) => t
-        .replace(/{name}/g, apt.customers.full_name)
-        .replace(/{date}/g, apt.booking_date)
-        .replace(/{time}/g, apt.booking_time.slice(0,5))
-        .replace(/{service}/g, apt.service_items?.name || '—')
+        .replace(/{name}/g, apt.customers.full_name || '')
+        .replace(/{date}/g, apt.booking_date || '')
+        .replace(/{time}/g, (apt.booking_time || '').slice(0,5))
+        .replace(/{service}/g, serviceName)
         .replace(/{reason}/g, apt.cancellation_reason || '無')
         .replace(/{details}/g, detailsStr || '無額外資訊');
       
@@ -93,7 +95,7 @@ serve(async (req) => {
         <div style="max-width:600px;margin:auto;padding:30px;border:1px solid #f1f5f9;border-radius:24px;background-color:#ffffff;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
           <div style="font-size:24px;font-weight:900;color:#2563eb;margin-bottom:20px;border-bottom:2px solid #eff6ff;padding-bottom:10px;">${subject}</div>
           <div style="white-space:pre-wrap;">${body}</div>
-          <br><br><hr style="border:none;border-top:1px solid #f1f5f9;"><p style="font-size:12px;color:#94a3b8;text-align:center;">此為系統自動發送訊息，請勿直&#25509;回覆。</p>
+          <br><br><hr style="border:none;border-top:1px solid #f1f5f9;"><p style="font-size:12px;color:#94a3b8;text-align:center;">&#27492;&#28858;&#31995;&#32113;&#33258;&#21205;&#30332;&#36865;&#35338;&#24687;&#65292;&#35531;&#21247;&#30452;&#25509;&#22238;&#35206;&#12290;</p>
         </div>
       </body></html>`,
     });
