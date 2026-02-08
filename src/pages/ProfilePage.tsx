@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useCustomer } from '../hooks/useCustomer';
-import { User, Phone, Mail, Save, ShieldCheck, Lock, Key } from 'lucide-react';
+import { User, Phone, Mail, Save, ShieldCheck, Lock } from 'lucide-react';
 import { useToast } from '../components/Toast';
+import { FormDefinition } from '../types';
 
 export const ProfilePage: React.FC = () => {
   const { customer, logout } = useCustomer();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [passLoading, setPassLoading] = useState(false);
-  
+  const [formDef, setFormDef] = useState<FormDefinition | null>(null);
+
   const [profile, setProfile] = useState({
     full_name: '',
     email: '',
@@ -23,6 +25,9 @@ export const ProfilePage: React.FC = () => {
     confirmPassword: ''
   });
 
+  useEffect(() => {
+    supabase.from('form_definitions').select('*').eq('type', 'customer_profile').single().then(({ data }) => setFormDef(data || null));
+  }, []);
   useEffect(() => {
     if (customer) {
       supabase.rpc('get_customer_profile', { p_customer_id: customer.id })
@@ -95,6 +100,21 @@ export const ProfilePage: React.FC = () => {
             <form onSubmit={handleSave} className="p-10 space-y-6">
                 <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block">您的全名</label><input type="text" className="input-field bg-slate-50 border-none rounded-2xl py-4" value={profile.full_name} onChange={e => setProfile({...profile, full_name: e.target.value})} /></div>
                 <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block">聯絡電話</label><input type="tel" className="input-field bg-slate-50 border-none rounded-2xl py-4" value={profile.phone} onChange={e => setProfile({...profile, phone: e.target.value})} /></div>
+                {formDef?.fields.filter(f => !f.isSystem).map(field => (
+                  <div key={field.id}>
+                    <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">{field.label} {field.required && <span className="text-red-500">*</span>}</label>
+                    {field.type === 'select' ? (
+                      <select className="input-field bg-slate-50 border-none rounded-2xl py-4" value={profile.custom_data?.[field.label] || ''} onChange={e => setProfile({...profile, custom_data: {...profile.custom_data, [field.label]: e.target.value}})}>
+                        <option value="">請選擇...</option>
+                        {field.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    ) : field.type === 'textarea' ? (
+                      <textarea className="input-field bg-slate-50 border-none rounded-2xl py-4 min-h-[100px]" value={profile.custom_data?.[field.label] || ''} onChange={e => setProfile({...profile, custom_data: {...profile.custom_data, [field.label]: e.target.value}})} />
+                    ) : (
+                      <input type={field.type || 'text'} className="input-field bg-slate-50 border-none rounded-2xl py-4" value={profile.custom_data?.[field.label] || ''} onChange={e => setProfile({...profile, custom_data: {...profile.custom_data, [field.label]: e.target.value}})} />
+                    )}
+                  </div>
+                ))}
                 <button type="submit" disabled={loading} className="btn-primary w-full py-4 rounded-2xl font-black shadow-lg shadow-blue-100">儲存基本資料</button>
             </form>
         </div>
