@@ -9,6 +9,7 @@ import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
@@ -91,7 +92,7 @@ serve(async (req) => {
       connection: { hostname: "smtp.gmail.com", port: 465, tls: true, auth: { username: config.user.trim(), password: config.pass.trim() } },
     });
 
-    const htmlContent = `<html><head><meta charset="UTF-8"></head><body style="font-family:sans-serif;line-height:1.6;color:#334155;">
+    const htmlContent = `<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"></head><body style="font-family:sans-serif;line-height:1.6;color:#334155;">
         <div style="max-width:600px;margin:auto;padding:30px;border:1px solid #f1f5f9;border-radius:24px;background-color:#ffffff;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
           <div style="font-size:24px;font-weight:900;color:#2563eb;margin-bottom:20px;border-bottom:2px solid #eff6ff;padding-bottom:10px;">${subject}</div>
           <div style="white-space:pre-wrap;">${body}</div>
@@ -107,14 +108,15 @@ serve(async (req) => {
       mimeContent: [{ mimeType: 'text/html; charset="UTF-8"', content: htmlBase64, transferEncoding: 'base64' }],
     });
 
-    // 當有人申請新預約且已啟用管理員通知時，額外寄送至管理員 Email
+    // 當有人申請新預約且已啟用管理員通知時，額外寄送至管理員 Email（結構與客戶信相同，避免亂碼）
     const adminEmail = (adminNotify?.email || '').trim();
     if (type === 'new' && adminNotify?.enabled && adminEmail) {
-      const adminHtmlContent = `<html><head><meta charset="UTF-8"></head><body style="font-family:sans-serif;line-height:1.6;color:#334155;">
+      const adminHtmlContent = `<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"></head><body style="font-family:sans-serif;line-height:1.6;color:#334155;">
         <div style="max-width:600px;margin:auto;padding:30px;border:1px solid #f1f5f9;border-radius:24px;background-color:#ffffff;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
-          <div style="font-size:14px;color:#64748b;margin-bottom:12px;">【管理員通知】有人申請新預約</div>
+          <div style="font-size:14px;color:#64748b;margin-bottom:12px;">&#12300;&#31649;&#29702;&#21729;&#36890;&#30693;&#12301;&#26377;&#20154;&#30003;&#35531;&#26032;&#38936;&#32004;</div>
           <div style="font-size:24px;font-weight:900;color:#2563eb;margin-bottom:20px;border-bottom:2px solid #eff6ff;padding-bottom:10px;">${subject}</div>
           <div style="white-space:pre-wrap;">${body}</div>
+          <br><br><hr style="border:none;border-top:1px solid #f1f5f9;"><p style="font-size:12px;color:#94a3b8;text-align:center;">&#27492;&#28858;&#31995;&#32113;&#33258;&#21205;&#30332;&#36865;&#35338;&#24687;&#65292;&#35531;&#21247;&#30452;&#25509;&#22238;&#35206;&#12290;</p>
         </div>
       </body></html>`;
       const adminHtmlBase64 = base64Encode(new TextEncoder().encode(adminHtmlContent));

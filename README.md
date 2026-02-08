@@ -70,7 +70,33 @@ npm run dev
 3. 進入 **SQL Editor**，將 `INITIAL_SETUP.sql` 內容貼上並執行。
 4. 前往 **Authentication > Users**，建立一個管理員帳號（用於登入後台）。
 
-### 步驟 2：Netlify 部署前端
+### 步驟 2：Supabase Edge Functions（通知信）
+
+Email 通知依賴 `notify` Edge Function，需先部署：
+
+**方式 A：使用 GitHub Actions（建議）**
+
+1. 前往 GitHub 專案 **Settings > Secrets and variables > Actions**。
+2. 新增 Secrets：
+   | Secret 名稱 | 說明 |
+   |-------------|------|
+   | `SUPABASE_ACCESS_TOKEN` | [Supabase Access Token](https://supabase.com/dashboard/account/tokens) |
+   | `SUPABASE_PROJECT_ID` | Supabase 專案 ID（網址列 `project/` 後面的英數字，例如 `lrzlvqoibdfnxjpssbzb`） |
+3. 推送程式碼到 `main` 後，Actions 會自動部署 `supabase/functions/notify`。
+
+**方式 B：手動部署**
+
+```bash
+# 安裝 Supabase CLI 後登入
+supabase login
+
+# 部署 notify（請將 <專案ID> 換成您的 Supabase 專案 ID）
+supabase functions deploy notify --project-ref <專案ID> --no-verify-jwt
+```
+
+> 請確認 Supabase Dashboard 中 **Edge Functions** 頁面有顯示 `notify` 且為已部署狀態，發送測試信才能成功。
+
+### 步驟 3：Netlify 部署前端
 
 1. 登入 [Netlify](https://netlify.com)，點擊 **Add new site > Import an existing project**。
 2. 選擇 **GitHub**，授權後選擇 `scorpioliu0953/booking_system`（或您的 fork）。
@@ -85,24 +111,13 @@ npm run dev
    | `VITE_SUPABASE_ANON_KEY` | Supabase anon public key |
 5. 點擊 **Deploy site** 開始部署。
 
-### 步驟 3：設定 SPA 路由（404 解決）
+### 步驟 4：設定 SPA 路由（404 解決）
 
 專案已內建 `netlify.toml` 與 `public/_redirects`，會將所有路徑轉導到 `index.html`，解決重新整理或直接輸入網址時出現 404 的問題。建置後 Netlify 會自動套用。
 
-### 步驟 4：Email 通知（Supabase Edge Function）
+### 步驟 5：設定 Email 通知（SMTP）
 
-本專案使用 GitHub Actions 在 push 時自動部署 `notify` 到 Supabase。
-
-1. 前往 GitHub 專案 **Settings > Secrets and variables > Actions**。
-2. 新增兩個 Secrets：
-
-   | Secret 名稱 | 說明 |
-   |-------------|------|
-   | `SUPABASE_ACCESS_TOKEN` | [Supabase Access Token](https://supabase.com/dashboard/account/tokens) |
-   | `SUPABASE_PROJECT_ID` | Supabase 專案 ID（網址列 `project/` 後面的英數字） |
-
-3. 推送程式碼到 `main` 後，Actions 會自動部署 `supabase/functions/notify`。
-4. 在系統後台 **設定 > 通知系統** 填寫 SMTP（例如 Gmail 應用程式密碼）即可發送預約通知信。
+Edge Function 部署完成後，在系統後台 **系統設定 > 通知系統** 填寫 SMTP（例如 Gmail 應用程式密碼）即可發送預約通知信。
 
 ---
 
@@ -110,7 +125,7 @@ npm run dev
 
 - **前台**：首頁、立即預約、會員登入/註冊、預約紀錄、個人資料
 - **後台**：營運概況、預約管理（列表/日曆）、服務項目管理、會員管理、時段設定、表單自定義、Email 範本、CMS 首頁編輯
-- **Email 變數**：`{name}`、`{date}`、`{time}`、`{service}`、`{reason}`、`{details}`
+- **Email 變數**：`{name}`、`{date}`、`{time}`、`{service}`、`{cost}`、`{reason}`、`{details}`
 
 ---
 
@@ -126,6 +141,11 @@ npm run dev
 
 - 確認 `netlify.toml` 與 `public/_redirects` 已正確部署。
 - Netlify 應會自動套用，若仍異常可檢查 Build 輸出目錄是否為 `dist`。
+
+### Q: 發送測試信出現「Failed to fetch」？
+
+- 確認 Supabase **Edge Functions** 頁面有顯示 `notify` 且為已部署狀態（function name 需為 `notify`）。
+- 確認 Netlify 環境變數 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY` 已正確設定並重新部署。
 
 ### Q: Email 主旨亂碼？
 
