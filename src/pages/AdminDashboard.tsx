@@ -111,7 +111,7 @@ const DashboardHome: React.FC<{ appointments: Appointment[], customers: any[] }>
     const total = appointments.length || 1;
 
     const next5Appointments = appointments
-        .filter(a => a.status !== 'cancelled')
+        .filter(a => a.status !== 'cancelled' && a.status !== 'completed')
         .map(a => ({ ...a, sortAt: new Date(`${a.booking_date}T${(a.booking_time || '00:00').slice(0, 5)}`) }))
         .filter(a => a.sortAt >= new Date())
         .sort((a, b) => a.sortAt.getTime() - b.sortAt.getTime())
