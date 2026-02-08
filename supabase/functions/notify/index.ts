@@ -3,6 +3,7 @@
 // ---------------------------------------------------------
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts"
 
@@ -87,17 +88,20 @@ serve(async (req) => {
       connection: { hostname: "smtp.gmail.com", port: 465, tls: true, auth: { username: config.user.trim(), password: config.pass.trim() } },
     });
 
-    await client.send({
-      from: config.user.trim(),
-      to: toEmail,
-      subject: formatSubject(subject),
-      html: `<html><head><meta charset="UTF-8"></head><body style="font-family:sans-serif;line-height:1.6;color:#334155;">
+    const htmlContent = `<html><head><meta charset="UTF-8"></head><body style="font-family:sans-serif;line-height:1.6;color:#334155;">
         <div style="max-width:600px;margin:auto;padding:30px;border:1px solid #f1f5f9;border-radius:24px;background-color:#ffffff;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
           <div style="font-size:24px;font-weight:900;color:#2563eb;margin-bottom:20px;border-bottom:2px solid #eff6ff;padding-bottom:10px;">${subject}</div>
           <div style="white-space:pre-wrap;">${body}</div>
           <br><br><hr style="border:none;border-top:1px solid #f1f5f9;"><p style="font-size:12px;color:#94a3b8;text-align:center;">&#27492;&#28858;&#31995;&#32113;&#33258;&#21205;&#30332;&#36865;&#35338;&#24687;&#65292;&#35531;&#21247;&#30452;&#25509;&#22238;&#35206;&#12290;</p>
         </div>
-      </body></html>`,
+      </body></html>`;
+    const htmlBase64 = base64Encode(new TextEncoder().encode(htmlContent));
+
+    await client.send({
+      from: config.user.trim(),
+      to: toEmail,
+      subject: formatSubject(subject),
+      mimeContent: [{ mimeType: 'text/html; charset="UTF-8"', content: htmlBase64, transferEncoding: 'base64' }],
     });
 
     await client.close();
