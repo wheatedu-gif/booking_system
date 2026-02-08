@@ -1,5 +1,5 @@
 -- =========================================================
--- 智慧預約系統 - 終極全功能整合初始化腳本 (V18 營運精準版)
+-- 智慧預約系統 - 終極全功能整合初始化腳本 (V19 緩衝時間版)
 -- =========================================================
 
 -- 0. 環境準備
@@ -7,13 +7,9 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- 1. 清理舊結構
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-DROP TRIGGER IF EXISTS trg_check_capacity ON appointments;
 DROP FUNCTION IF EXISTS handle_new_admin_user();
-DROP FUNCTION IF EXISTS check_booking_capacity();
 DROP FUNCTION IF EXISTS register_customer(TEXT, TEXT, TEXT, JSONB);
 DROP FUNCTION IF EXISTS login_customer(TEXT, TEXT);
-DROP FUNCTION IF EXISTS update_customer_password(UUID, TEXT, TEXT);
-DROP FUNCTION IF EXISTS admin_reset_customer_password(UUID, TEXT);
 
 DROP TABLE IF EXISTS email_logs CASCADE;
 DROP TABLE IF EXISTS appointments CASCADE;
@@ -36,7 +32,7 @@ CREATE TABLE business_hours (day_of_week INT PRIMARY KEY CHECK (day_of_week BETW
 CREATE TABLE special_dates (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), date DATE UNIQUE NOT NULL, is_closed BOOLEAN DEFAULT true, start_time TIME, end_time TIME, note TEXT);
 CREATE TABLE system_settings (key TEXT PRIMARY KEY, value JSONB NOT NULL);
 
--- 3. RLS 安全政策
+-- 3. 安全性政策
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
@@ -102,11 +98,12 @@ INSERT INTO form_definitions (type, fields) VALUES
 
 INSERT INTO business_hours (day_of_week, is_open, start_time, end_time) VALUES (0, false, '09:00', '18:00'), (1, true, '09:00', '18:00'), (2, true, '09:00', '18:00'), (3, true, '09:00', '18:00'), (4, true, '09:00', '18:00'), (5, true, '09:00', '18:00'), (6, false, '09:00', '18:00');
 
--- 精準規則：加入提前預約時間 (Lead Time)
+-- 關鍵規則更新：加入 buffer_time (間隔時間)
 INSERT INTO system_settings (key, value) VALUES 
 ('booking_rules', '{
   "slot_interval": 15, 
   "service_duration": 50, 
+  "buffer_time": 10,
   "booking_window_days": 30, 
   "min_lead_time_hours": 2,
   "max_concurrent_bookings": 1,
