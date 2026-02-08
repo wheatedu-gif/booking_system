@@ -3,9 +3,8 @@
 // ---------------------------------------------------------
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts"
+import { SMTPClient, quotedPrintableEncode } from "https://deno.land/x/denomailer@1.6.0/mod.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -99,13 +98,13 @@ serve(async (req) => {
           <br><br><hr style="border:none;border-top:1px solid #f1f5f9;"><p style="font-size:12px;color:#94a3b8;text-align:center;">&#27492;&#28858;&#31995;&#32113;&#33258;&#21205;&#30332;&#36865;&#35338;&#24687;&#65292;&#35531;&#21247;&#30452;&#25509;&#22238;&#35206;&#12290;</p>
         </div>
       </body></html>`;
-    const htmlBase64 = base64Encode(new TextEncoder().encode(htmlContent));
+    const htmlEncoded = quotedPrintableEncode(htmlContent);
 
     await client.send({
       from: config.user.trim(),
       to: toEmail,
       subject: formatSubject(subject),
-      mimeContent: [{ mimeType: 'text/html; charset="UTF-8"', content: htmlBase64, transferEncoding: 'base64' }],
+      mimeContent: [{ mimeType: 'text/html; charset="UTF-8"', content: htmlEncoded, transferEncoding: 'quoted-printable' }],
     });
 
     // 當有人申請新預約且已啟用管理員通知時，額外寄送至管理員 Email（結構與客戶信相同，避免亂碼）
@@ -119,12 +118,12 @@ serve(async (req) => {
           <br><br><hr style="border:none;border-top:1px solid #f1f5f9;"><p style="font-size:12px;color:#94a3b8;text-align:center;">&#27492;&#28858;&#31995;&#32113;&#33258;&#21205;&#30332;&#36865;&#35338;&#24687;&#65292;&#35531;&#21247;&#30452;&#25509;&#22238;&#35206;&#12290;</p>
         </div>
       </body></html>`;
-      const adminHtmlBase64 = base64Encode(new TextEncoder().encode(adminHtmlContent));
+      const adminHtmlEncoded = quotedPrintableEncode(adminHtmlContent);
       await client.send({
         from: config.user.trim(),
         to: adminEmail,
         subject: formatSubject(`【管理員】${subject}`),
-        mimeContent: [{ mimeType: 'text/html; charset="UTF-8"', content: adminHtmlBase64, transferEncoding: 'base64' }],
+        mimeContent: [{ mimeType: 'text/html; charset="UTF-8"', content: adminHtmlEncoded, transferEncoding: 'quoted-printable' }],
       });
     }
 
