@@ -18,11 +18,6 @@ function formatSubject(str: string): string {
   return str || '';
 }
 
-// 將字串轉為 HTML 實體，避免管理員信被部分客戶端誤解 quoted-printable
-function toHtmlEntities(s: string): string {
-  return Array.from(s).map(c => c.charCodeAt(0) > 127 ? `&#${c.charCodeAt(0)};` : c).join('');
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -114,17 +109,15 @@ serve(async (req) => {
     });
     await client.close();
 
-    // 當有人申請新預約且已啟用管理員通知時，使用「獨立 SMTP 連線」寄送至管理員
-    // 內文全部改為 HTML 實體，避免部分客戶端無法正確解碼 quoted-printable
+    // 當有人申請新預約且已啟用管理員通知時，寄送簡短通知（與測試信結構相同，避免亂碼）
     const adminEmail = (adminNotify?.email || '').trim();
     if (type === 'new' && adminNotify?.enabled && adminEmail) {
-      const subjEnt = toHtmlEntities(subject);
-      const bodyEnt = toHtmlEntities(body);
+      const adminSubject = '有人申請新預約';
+      const adminBody = '有人申請新預約，請至後台查看。';
       const adminHtmlContent = `<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"></head><body style="font-family:sans-serif;line-height:1.6;color:#334155;">
         <div style="max-width:600px;margin:auto;padding:30px;border:1px solid #f1f5f9;border-radius:24px;background-color:#ffffff;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
-          <div style="font-size:14px;color:#64748b;margin-bottom:12px;">&#12300;&#31649;&#29702;&#21729;&#36890;&#30693;&#12301;&#26377;&#20154;&#30003;&#35531;&#26032;&#38936;&#32004;</div>
-          <div style="font-size:24px;font-weight:900;color:#2563eb;margin-bottom:20px;border-bottom:2px solid #eff6ff;padding-bottom:10px;">${subjEnt}</div>
-          <div style="white-space:pre-wrap;">${bodyEnt}</div>
+          <div style="font-size:24px;font-weight:900;color:#2563eb;margin-bottom:20px;border-bottom:2px solid #eff6ff;padding-bottom:10px;">${adminSubject}</div>
+          <div style="white-space:pre-wrap;">${adminBody}</div>
           <br><br><hr style="border:none;border-top:1px solid #f1f5f9;"><p style="font-size:12px;color:#94a3b8;text-align:center;">&#27492;&#28858;&#31995;&#32113;&#33258;&#21205;&#30332;&#36865;&#35338;&#24687;&#65292;&#35531;&#21247;&#30452;&#25509;&#22238;&#35206;&#12290;</p>
         </div>
       </body></html>`;
@@ -135,7 +128,7 @@ serve(async (req) => {
       await adminClient.send({
         from: config.user.trim(),
         to: adminEmail,
-        subject: formatSubject(`【管理員】${subject}`),
+        subject: formatSubject(adminSubject),
         mimeContent: [{ mimeType: 'text/html; charset="UTF-8"', content: adminHtmlEncoded, transferEncoding: 'quoted-printable' }],
       });
       await adminClient.close();
