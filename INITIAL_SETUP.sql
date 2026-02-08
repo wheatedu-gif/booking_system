@@ -61,6 +61,7 @@ ALTER TABLE customer_password_resets ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Admin All" ON profiles FOR ALL USING (auth.role() = 'authenticated');
 CREATE POLICY "Admin All Cust" ON customers FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Public Read Customers" ON customers FOR SELECT USING (true);
 CREATE POLICY "Admin All Apt" ON appointments FOR ALL USING (auth.role() = 'authenticated');
 CREATE POLICY "Admin All Logs" ON email_logs FOR ALL USING (auth.role() = 'authenticated');
 CREATE POLICY "Admin All Content" ON page_content FOR ALL USING (auth.role() = 'authenticated');

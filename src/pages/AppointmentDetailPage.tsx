@@ -32,7 +32,7 @@ export const AppointmentDetailPage: React.FC = () => {
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
   if (!apt) return <div className="p-20 text-center font-bold text-slate-400 italic">找不到預約紀錄</div>;
 
-  const customer = (apt as any).customers;
+  const customer = (apt as any).customers ?? (apt as any).customer;
 
   const getStatusDisplay = () => {
     switch (apt.status) {
