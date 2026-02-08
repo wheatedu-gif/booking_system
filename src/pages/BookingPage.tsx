@@ -189,7 +189,7 @@ export const BookingPage: React.FC = () => {
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block ml-1">1. 選擇服務項目</label>
                         <select className="input-field rounded-2xl py-4 bg-slate-50 border-none shadow-inner w-full" value={selectedServiceItem} onChange={e => { setSelectedServiceItem(e.target.value); setBookingTime(''); }} required>
                             <option value="">請選擇服務...</option>
-                            {serviceItems.map(s => <option key={s.id} value={s.id}>{s.name} {s.description && `— ${s.description}`} ({s.duration_minutes} 分鐘)</option>)}
+                            {serviceItems.map(s => <option key={s.id} value={s.id}>{s.name} {s.description && `— ${s.description}`} ({s.duration_minutes} 分鐘){((s.price ?? 0) > 0 ? ` · $${s.price} 元` : '')}</option>)}
                         </select>
                     </div>
                     <div>
@@ -256,7 +256,7 @@ export const BookingPage: React.FC = () => {
                         <div key={f.id}><label className="text-xs font-bold text-slate-500 mb-2 block">{f.label}</label>{f.type === 'select' ? (<select required={f.required} className="input-field bg-slate-50 border-none rounded-xl py-3" value={formData[f.label] || ''} onChange={e => setFormData({...formData, [f.label]: e.target.value})}><option value="">請選擇...</option>{f.options?.map(o => <option key={o} value={o}>{o}</option>)}</select>) : f.type === 'textarea' ? (<textarea className="input-field bg-slate-50 border-none rounded-xl py-3 min-h-[100px]" placeholder="可換行輸入" value={formData[f.label] || ''} onChange={e => setFormData({...formData, [f.label]: e.target.value})} />) : (<input className="input-field bg-slate-50 border-none rounded-xl py-3" required={f.required} type={f.type || 'text'} value={formData[f.label] || ''} onChange={e => setFormData({...formData, [f.label]: e.target.value})} />)}</div>
                     ))}
                     <div className="bg-blue-50 p-5 rounded-2xl space-y-2 border border-blue-100 shadow-inner">
-                        <div className="flex justify-between text-xs font-bold"><span className="text-slate-400">服務項目</span><span className="text-blue-600">{selectedService?.name || '未選擇'}</span></div>
+                        <div className="flex justify-between text-xs font-bold"><span className="text-slate-400">服務項目</span><span className="text-blue-600">{selectedService?.name || '未選擇'}{((selectedService?.price ?? 0) > 0 ? ` · $${selectedService.price} 元` : '')}</span></div>
                         <div className="flex justify-between text-xs font-bold"><span className="text-slate-400">日期</span><span className="text-blue-600">{bookingDate}</span></div>
                         <div className="flex justify-between text-xs font-bold"><span className="text-slate-400">時段</span><span className="text-blue-600">{bookingTime || '未選擇'}</span></div>
                     </div>

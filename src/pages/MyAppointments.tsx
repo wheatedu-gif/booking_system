@@ -101,7 +101,7 @@ export const MyAppointments: React.FC = () => {
                                 <span className="text-xl font-black text-slate-800">{apt.booking_date}</span>
                                 <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border ${getStatusStyle(apt.status)}`}>{STATUS_MAP[apt.status] || apt.status}</span>
                             </div>
-                            <div className="flex items-center gap-4 text-slate-400 font-bold text-sm"><span className="flex items-center gap-1.5"><Clock size={14}/> {apt.booking_time.slice(0,5)}</span><span className="text-slate-500">{(apt as any).service_items?.name || '—'}</span></div>
+                            <div className="flex items-center gap-4 text-slate-400 font-bold text-sm"><span className="flex items-center gap-1.5"><Clock size={14}/> {apt.booking_time.slice(0,5)}</span><span className="text-slate-500">{(apt as any).service_items?.name || '—'}{((apt as any).service_items?.price != null && (apt as any).service_items?.price > 0) ? ` · $${(apt as any).service_items.price} 元` : ''}</span></div>
                         </div>
                     </div>
                     <div className="flex items-center gap-3">

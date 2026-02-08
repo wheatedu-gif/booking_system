@@ -78,7 +78,7 @@ export const AppointmentDetailPage: React.FC = () => {
                 </div>
                 <div className="flex gap-4 sm:col-span-2">
                     <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shrink-0 shadow-inner"><User size={20}/></div>
-                    <div><div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">服務項目</div><div className="text-xl font-black text-slate-800">{(apt as any).service_items?.name || '—'}</div></div>
+                    <div><div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">服務項目</div><div className="text-xl font-black text-slate-800">{(apt as any).service_items?.name || '—'}{((apt as any).service_items?.price != null && (apt as any).service_items?.price > 0) ? ` · $${(apt as any).service_items.price} 元` : ''}</div></div>
                 </div>
             </section>
 

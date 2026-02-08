@@ -33,7 +33,7 @@ DROP TABLE IF EXISTS profiles CASCADE;
 -- 2. 建立資料表
 CREATE TABLE profiles (id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY, email TEXT NOT NULL, full_name TEXT, role TEXT DEFAULT 'admin', created_at TIMESTAMPTZ DEFAULT NOW());
 CREATE TABLE customers (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, full_name TEXT NOT NULL, phone TEXT, admin_notes TEXT, custom_data JSONB DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ DEFAULT NOW());
-CREATE TABLE service_items (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT NOT NULL, description TEXT, duration_minutes INT NOT NULL DEFAULT 50, sort_order INT DEFAULT 0, created_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE service_items (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT NOT NULL, description TEXT, duration_minutes INT NOT NULL DEFAULT 50, price INT DEFAULT 0, sort_order INT DEFAULT 0, created_at TIMESTAMPTZ DEFAULT NOW());
 CREATE TABLE appointments (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), customer_id UUID REFERENCES customers(id) ON DELETE CASCADE, service_item_id UUID REFERENCES service_items(id), booking_date DATE NOT NULL, booking_time TIME NOT NULL, status TEXT DEFAULT 'pending', booking_data JSONB DEFAULT '{}'::jsonb, cancellation_reason TEXT, admin_notes TEXT, source TEXT DEFAULT 'online', created_at TIMESTAMPTZ DEFAULT NOW());
 CREATE TABLE email_logs (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), recipient TEXT NOT NULL, subject TEXT, type TEXT, status TEXT DEFAULT 'pending', error_message TEXT, created_at TIMESTAMPTZ DEFAULT NOW());
 CREATE TABLE page_content (section_key TEXT PRIMARY KEY, content JSONB NOT NULL);
@@ -186,12 +186,13 @@ INSERT INTO form_definitions (type, fields) VALUES
 
 INSERT INTO business_hours (day_of_week, is_open, start_time, end_time) VALUES (0, false, '09:00', '18:00'), (1, true, '09:00', '18:00'), (2, true, '09:00', '18:00'), (3, true, '09:00', '18:00'), (4, true, '09:00', '18:00'), (5, true, '09:00', '18:00'), (6, false, '09:00', '18:00');
 
-INSERT INTO service_items (name, description, duration_minutes, sort_order) VALUES ('一般服務', '標準預約服務', 50, 0);
+INSERT INTO service_items (name, description, duration_minutes, price, sort_order) VALUES ('一般服務', '標準預約服務', 50, 0, 0);
 
 INSERT INTO system_settings (key, value) VALUES 
 ('booking_rules', '{"slot_interval": 15, "buffer_time": 10, "booking_window_days": 30, "min_lead_time_hours": 2, "max_concurrent_bookings": 1, "allow_customer_cancel": true, "cancel_before_hours": 24}'::jsonb),
 ('email_config', '{"enabled": false, "user": "", "pass": "", "from_name": "預約系統"}'::jsonb),
-('email_templates', '{"new_booking": {"subject": "收到預約申請", "body": "您好 {name}，預約待確認。"}, "confirmed": {"subject": "預約確認成功", "body": "您好 {name}，預約已確認！"}, "cancelled": {"subject": "預約取消通知", "body": "您好 {name}，預約已取消。"}, "completed": {"subject": "感謝您的光臨", "body": "您好 {name}，感謝光臨！"}}'::jsonb);
+('email_templates', '{"new_booking": {"subject": "收到預約申請", "body": "您好 {name}，預約待確認。"}, "confirmed": {"subject": "預約確認成功", "body": "您好 {name}，預約已確認！"}, "cancelled": {"subject": "預約取消通知", "body": "您好 {name}，預約已取消。"}, "completed": {"subject": "感謝您的光臨", "body": "您好 {name}，感謝光臨！"}}'::jsonb),
+('admin_notify', '{"enabled": false, "email": ""}'::jsonb);
 
 INSERT INTO page_content (section_key, content) VALUES ('landing_page', '{"brand_name": "智慧預約", "hero": {"title": "專業預約管理", "subtitle": "流暢預約體驗"}, "features": []}');
 INSERT INTO public.profiles (id, email, full_name, role) SELECT id, email, COALESCE(raw_user_meta_data->>'full_name', 'Admin'), 'admin' FROM auth.users ON CONFLICT (id) DO UPDATE SET role = 'admin';

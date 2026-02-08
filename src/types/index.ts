@@ -30,6 +30,7 @@ export interface ServiceItem {
   name: string;
   description: string | null;
   duration_minutes: number;
+  price?: number;
   sort_order: number;
 }
 

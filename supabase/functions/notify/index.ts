@@ -27,9 +27,10 @@ serve(async (req) => {
     const payload = await req.json();
     const { record_id, type, target_email, site_url: payloadSiteUrl } = payload;
 
-    const { data: settings } = await supabase.from('system_settings').select('*').in('key', ['email_config', 'email_templates', 'site_url']);
+    const { data: settings } = await supabase.from('system_settings').select('*').in('key', ['email_config', 'email_templates', 'site_url', 'admin_notify']);
     const config = settings?.find(s => s.key === 'email_config')?.value;
     const templates = settings?.find(s => s.key === 'email_templates')?.value;
+    const adminNotify = settings?.find(s => s.key === 'admin_notify')?.value;
     const siteUrl = (payloadSiteUrl || settings?.find(s => s.key === 'site_url')?.value?.url || '').toString().trim().replace(/\/$/, '');
 
     if (!config || !config.enabled) {
@@ -51,7 +52,7 @@ serve(async (req) => {
       subject = '發信連線測試成功';
       body = '🎉 您的預約系統 Email 通知已設定完成！';
     } else {
-      const { data: apt } = await supabase.from('appointments').select('*, customers(*), service_items(name)').eq('id', record_id).single();
+      const { data: apt } = await supabase.from('appointments').select('*, customers(*), service_items(name, price)').eq('id', record_id).single();
       if (!apt) throw new Error("Apt not found");
       toEmail = apt.customers.email.trim();
       const si = apt.service_items ?? apt.service_item;
@@ -69,11 +70,13 @@ serve(async (req) => {
         .map(([k, v]) => `${k}: ${v}`)
         .join('\n');
 
+      const costStr = (si && typeof si === 'object' && (si as any).price != null && (si as any).price > 0) ? `$${(si as any).price} 元` : '—';
       const replaceVars = (t: string) => t
         .replace(/{name}/g, apt.customers.full_name || '')
         .replace(/{date}/g, apt.booking_date || '')
         .replace(/{time}/g, (apt.booking_time || '').slice(0,5))
         .replace(/{service}/g, serviceName)
+        .replace(/{cost}/g, costStr)
         .replace(/{reason}/g, apt.cancellation_reason || '無')
         .replace(/{details}/g, detailsStr || '無額外資訊');
       
@@ -103,6 +106,25 @@ serve(async (req) => {
       subject: formatSubject(subject),
       mimeContent: [{ mimeType: 'text/html; charset="UTF-8"', content: htmlBase64, transferEncoding: 'base64' }],
     });
+
+    // 當有人申請新預約且已啟用管理員通知時，額外寄送至管理員 Email
+    const adminEmail = (adminNotify?.email || '').trim();
+    if (type === 'new' && adminNotify?.enabled && adminEmail) {
+      const adminHtmlContent = `<html><head><meta charset="UTF-8"></head><body style="font-family:sans-serif;line-height:1.6;color:#334155;">
+        <div style="max-width:600px;margin:auto;padding:30px;border:1px solid #f1f5f9;border-radius:24px;background-color:#ffffff;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
+          <div style="font-size:14px;color:#64748b;margin-bottom:12px;">【管理員通知】有人申請新預約</div>
+          <div style="font-size:24px;font-weight:900;color:#2563eb;margin-bottom:20px;border-bottom:2px solid #eff6ff;padding-bottom:10px;">${subject}</div>
+          <div style="white-space:pre-wrap;">${body}</div>
+        </div>
+      </body></html>`;
+      const adminHtmlBase64 = base64Encode(new TextEncoder().encode(adminHtmlContent));
+      await client.send({
+        from: config.user.trim(),
+        to: adminEmail,
+        subject: formatSubject(`【管理員】${subject}`),
+        mimeContent: [{ mimeType: 'text/html; charset="UTF-8"', content: adminHtmlBase64, transferEncoding: 'base64' }],
+      });
+    }
 
     await client.close();
     if (logId) await supabase.from('email_logs').update({ status: 'sent' }).eq('id', logId);
