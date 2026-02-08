@@ -6,6 +6,7 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export type NotifyPayload =
   | { type: 'test'; target_email?: string }
+  | { type: 'password_reset'; target_email: string; site_url?: string }
   | { type: 'new' | 'update' | 'cancel'; record_id: string };
 
 export async function callNotify(payload: NotifyPayload): Promise<{ ok: boolean; error?: string }> {

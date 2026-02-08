@@ -13,10 +13,10 @@ export interface FormField {
   id: string;
   name: string;
   label: string;
-  type: 'text' | 'number' | 'select' | 'date' | 'tel';
+  type: 'text' | 'number' | 'select' | 'date' | 'tel' | string;
   required: boolean;
-  options?: string[]; // 用於 select 類型
-  isSystem?: boolean; // 標記是否為系統預設欄位
+  options?: string[];
+  isSystem?: boolean;
 }
 
 export interface FormDefinition {
@@ -25,16 +25,27 @@ export interface FormDefinition {
   fields: FormField[];
 }
 
+export interface ServiceItem {
+  id: string;
+  name: string;
+  description: string | null;
+  duration_minutes: number;
+  sort_order: number;
+}
+
 export interface Appointment {
   id: string;
   customer_id: string;
+  service_item_id?: string | null;
   booking_date: string;
   booking_time: string;
-  status: 'pending' | 'confirmed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
   booking_data: Record<string, any>;
-  cancellation_reason?: string; // 新增此欄位
+  cancellation_reason?: string;
+  admin_notes?: string;
   created_at: string;
   profiles?: Profile;
+  service_items?: ServiceItem | null;
 }
 
 export interface SystemSettings {

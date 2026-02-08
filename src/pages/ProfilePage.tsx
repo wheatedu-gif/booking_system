@@ -25,14 +25,15 @@ export const ProfilePage: React.FC = () => {
 
   useEffect(() => {
     if (customer) {
-      supabase.from('customers').select('*').eq('id', customer.id).single()
+      supabase.rpc('get_customer_profile', { p_customer_id: customer.id })
         .then(({ data }) => {
-          if (data) {
+          if (data?.success && data?.data) {
+            const d = data.data;
             setProfile({
-              full_name: data.full_name,
-              email: data.email,
-              phone: data.phone || '',
-              custom_data: data.custom_data || {}
+              full_name: d.full_name || '',
+              email: d.email || '',
+              phone: d.phone || d.custom_data?.phone || '',
+              custom_data: d.custom_data || {}
             });
           }
         });
@@ -44,16 +45,15 @@ export const ProfilePage: React.FC = () => {
     if (!customer) return;
     setLoading(true);
 
-    const { error } = await supabase
-      .from('customers')
-      .update({
-        full_name: profile.full_name,
-        phone: profile.phone,
-        custom_data: profile.custom_data
-      })
-      .eq('id', customer.id);
+    const mergedCustom = { ...profile.custom_data, phone: profile.phone };
+    const { data, error } = await supabase.rpc('update_customer_profile', {
+      p_customer_id: customer.id,
+      p_full_name: profile.full_name,
+      p_phone: profile.phone,
+      p_custom_data: mergedCustom
+    });
 
-    if (error) showToast('更新失敗', 'error');
+    if (error || !data?.success) showToast(data?.message || '更新失敗', 'error');
     else showToast('基本資料已更新');
     setLoading(false);
   };

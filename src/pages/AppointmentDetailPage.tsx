@@ -17,7 +17,7 @@ export const AppointmentDetailPage: React.FC = () => {
       
       // 同步讀取預約資料與品牌名稱
       const [aptRes, contentRes] = await Promise.all([
-        supabase.from('appointments').select('*, customers(full_name, email, phone)').eq('id', id).single(),
+        supabase.from('appointments').select('*, customers(full_name, email, phone), service_items(*)').eq('id', id).single(),
         supabase.from('page_content').select('content').eq('section_key', 'landing_page').single()
       ]);
 
@@ -75,6 +75,10 @@ export const AppointmentDetailPage: React.FC = () => {
                 <div className="flex gap-4">
                     <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shrink-0 shadow-inner"><Clock /></div>
                     <div><div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">預約時段</div><div className="text-xl font-black text-slate-800">{apt.booking_time.slice(0,5)}</div></div>
+                </div>
+                <div className="flex gap-4 sm:col-span-2">
+                    <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shrink-0 shadow-inner"><User size={20}/></div>
+                    <div><div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">服務項目</div><div className="text-xl font-black text-slate-800">{(apt as any).service_items?.name || '—'}</div></div>
                 </div>
             </section>
 

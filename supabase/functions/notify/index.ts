@@ -1,5 +1,5 @@
 // ---------------------------------------------------------
-// Supabase Edge Function: notify (最終維運穩定版)
+// Supabase Edge Function: notify (V2.1 支援詳細資料變數)
 // ---------------------------------------------------------
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
@@ -11,7 +11,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// 主旨：直接使用 UTF-8（Gmail 支援 SMTPUTF8），避免 RFC 2047 解碼問題
+// 直接使用 UTF-8，Gmail SMTP 支援 SMTPUTF8
 function formatSubject(str: string): string {
   return str || '';
 }
@@ -23,21 +23,13 @@ serve(async (req) => {
   let logId: string | null = null;
 
   try {
-    let payload: any;
-    try {
-      payload = await req.json();
-    } catch (_) {
-      return new Response(JSON.stringify({ error: "Invalid JSON body" }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 });
-    }
-    if (!payload || typeof payload !== 'object') {
-      return new Response(JSON.stringify({ error: "Invalid payload" }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 });
-    }
-    const { record_id, type, target_email } = payload;
+    const payload = await req.json();
+    const { record_id, type, target_email, site_url: payloadSiteUrl } = payload;
 
-    // 1. 獲取設定與範本
-    const { data: settings } = await supabase.from('system_settings').select('*').in('key', ['email_config', 'email_templates']);
+    const { data: settings } = await supabase.from('system_settings').select('*').in('key', ['email_config', 'email_templates', 'site_url']);
     const config = settings?.find(s => s.key === 'email_config')?.value;
     const templates = settings?.find(s => s.key === 'email_templates')?.value;
+    const siteUrl = (payloadSiteUrl || settings?.find(s => s.key === 'site_url')?.value?.url || '').toString().trim().replace(/\/$/, '');
 
     if (!config || !config.enabled) {
       return new Response(JSON.stringify({ error: "Email Disabled", message: "發信功能未啟用，請在後台開啟。" }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 });
@@ -45,63 +37,73 @@ serve(async (req) => {
 
     let toEmail = '', subject = '', body = '';
 
-    if (type === 'test') {
+    if (type === 'password_reset') {
+      toEmail = (target_email || '').trim().toLowerCase();
+      if (!toEmail) throw new Error("Missing target_email for password_reset");
+      const { data: resetRow } = await supabase.from('customer_password_resets').select('token').eq('email', toEmail).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(1).single();
+      if (!resetRow?.token) throw new Error("無效或已過期的重設連結，請重新申請");
+      const resetLink = siteUrl ? `${siteUrl}/reset-password?token=${resetRow.token}` : '（請於後台設定站點網址以啟用重設連結）';
+      subject = '重設密碼';
+      body = `您已申請重設密碼，請點擊以下連結完成設定：\n\n${resetLink}\n\n連結有效期限為 1 小時。\n若您未申請此操作，請忽略此信件。`;
+    } else if (type === 'test') {
       toEmail = (target_email || config.user).trim();
       subject = '發信連線測試成功';
-      body = '🎉 恭喜！您的 SMTP 設定已正確連線，中文顯示正常。';
+      body = '🎉 您的預約系統 Email 通知已設定完成！';
     } else {
-      if (!record_id) {
-        return new Response(JSON.stringify({ error: "Missing record_id" }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 });
-      }
-      const { data: apt } = await supabase.from('appointments').select('*, customers(*)').eq('id', record_id).single();
-      if (!apt) throw new Error("Apt data not found");
+      const { data: apt } = await supabase.from('appointments').select('*, customers(*), service_items(name)').eq('id', record_id).single();
+      if (!apt) throw new Error("Apt not found");
       toEmail = apt.customers.email.trim();
       
-      let tplKey = (type === 'update' && apt.status === 'confirmed') ? 'confirmed' : (type === 'cancel' || apt.status === 'cancelled' ? 'cancelled' : 'new_booking');
+      let tplKey = 'new_booking';
+      if (apt.status === 'confirmed') tplKey = 'confirmed';
+      if (apt.status === 'cancelled') tplKey = 'cancelled';
       if (apt.status === 'completed') tplKey = 'completed';
 
       const tpl = templates?.[tplKey] || { subject: '預約通知', body: '您的預約狀態已更新。' };
-      const replaceVars = (t: string) => t.replace(/{name}/g, apt.customers.full_name).replace(/{date}/g, apt.booking_date).replace(/{time}/g, apt.booking_time.slice(0,5)).replace(/{reason}/g, apt.cancellation_reason || '無');
+      
+      // 整理自定義資料
+      const detailsStr = Object.entries(apt.booking_data || {})
+        .map(([k, v]) => `${k}: ${v}`)
+        .join('\n');
+
+      const replaceVars = (t: string) => t
+        .replace(/{name}/g, apt.customers.full_name)
+        .replace(/{date}/g, apt.booking_date)
+        .replace(/{time}/g, apt.booking_time.slice(0,5))
+        .replace(/{service}/g, apt.service_items?.name || '—')
+        .replace(/{reason}/g, apt.cancellation_reason || '無')
+        .replace(/{details}/g, detailsStr || '無額外資訊');
       
       subject = replaceVars(tpl.subject);
       body = replaceVars(tpl.body);
     }
 
-    // 2. 預先建立日誌 (非阻塞，失敗不影響發信)
     const { data: logData } = await supabase.from('email_logs').insert([{ recipient: toEmail, subject, type, status: 'pending' }]).select().single();
-    if (logData?.id) logId = logData.id;
+    logId = logData?.id;
 
-    // 3. 建立連線並發送
     const client = new SMTPClient({
       connection: { hostname: "smtp.gmail.com", port: 465, tls: true, auth: { username: config.user.trim(), password: config.pass.trim() } },
     });
-
-    const safeBody = String(body || '').replace(/\n/g, '<br>');
-    const htmlBody = `<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"></head>
-<body style="font-family:sans-serif;line-height:1.6;color:#334155;">
-  <div style="max-width:600px;margin:auto;padding:20px;border:1px solid #f1f5f9;border-radius:16px;">
-    ${safeBody}
-    <br><br><hr style="border:none;border-top:1px solid #eee;"><p style="font-size:12px;color:#94a3b8;">&#31995;&#32113;&#33258;&#21205;&#30332;&#36865;&#65292;&#35531;&#21247;&#30452;&#25509;&#22238;&#22797;&#12290;</p>
-  </div>
-</body>
-</html>`;
 
     await client.send({
       from: config.user.trim(),
       to: toEmail,
       subject: formatSubject(subject),
-      html: htmlBody,
+      html: `<html><head><meta charset="UTF-8"></head><body style="font-family:sans-serif;line-height:1.6;color:#334155;">
+        <div style="max-width:600px;margin:auto;padding:30px;border:1px solid #f1f5f9;border-radius:24px;background-color:#ffffff;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
+          <div style="font-size:24px;font-weight:900;color:#2563eb;margin-bottom:20px;border-bottom:2px solid #eff6ff;padding-bottom:10px;">${subject}</div>
+          <div style="white-space:pre-wrap;">${body}</div>
+          <br><br><hr style="border:none;border-top:1px solid #f1f5f9;"><p style="font-size:12px;color:#94a3b8;text-align:center;">此為系統自動發送訊息，請勿直&#25509;回覆。</p>
+        </div>
+      </body></html>`,
     });
 
     await client.close();
     if (logId) await supabase.from('email_logs').update({ status: 'sent' }).eq('id', logId);
-
-    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });
+    return new Response(JSON.stringify({ success: true }), { headers: corsHeaders, status: 200 });
 
   } catch (error: any) {
     if (logId) await supabase.from('email_logs').update({ status: 'failed', error_message: error.message }).eq('id', logId);
-    return new Response(JSON.stringify({ error: error.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 });
+    return new Response(JSON.stringify({ error: error.message }), { headers: corsHeaders, status: 500 });
   }
 })

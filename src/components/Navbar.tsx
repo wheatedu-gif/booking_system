@@ -55,10 +55,10 @@ export const Navbar: React.FC = () => {
               </div>
             ) : customer ? (
               <div className="flex items-center gap-4">
-                <div className="flex flex-col items-end">
-                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Customer</span>
+                <Link to="/profile" className="flex flex-col items-end hover:opacity-80 transition-opacity">
+                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">會員中心</span>
                     <span className="text-sm font-bold text-slate-700">{customer.full_name}</span>
-                </div>
+                </Link>
                 <button onClick={() => { customerLogout(); navigate('/'); }} className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
                   <LogOut size={20} />
                 </button>
@@ -84,7 +84,10 @@ export const Navbar: React.FC = () => {
           <Link to="/my-appointments" className="block p-4 text-sm font-bold text-slate-600" onClick={() => setIsOpen(false)}>預約紀錄</Link>
           <div className="pt-2 border-t border-slate-50">
             {customer ? (
+                <>
+                <Link to="/profile" className="block p-4 text-sm font-bold text-slate-600" onClick={() => setIsOpen(false)}>會員中心</Link>
                 <button onClick={() => { customerLogout(); setIsOpen(false); }} className="w-full text-left p-4 text-sm font-bold text-red-500">登出帳號</button>
+                </>
             ) : (
                 <Link to="/customer-auth" className="block p-4 text-sm font-bold text-blue-600" onClick={() => setIsOpen(false)}>登入 / 註冊</Link>
             )}

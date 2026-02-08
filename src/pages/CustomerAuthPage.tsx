@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useCustomer } from '../hooks/useCustomer';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { User, Mail, Lock, AlertCircle, Phone, FileText, CheckSquare, Square, X } from 'lucide-react';
+import { callNotify } from '../lib/notifyApi';
 import { FormDefinition } from '../types';
 import { useToast } from '../components/Toast';
 
 export const CustomerAuthPage: React.FC = () => {
   const { login, register } = useCustomer();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: string })?.from || '/booking';
   const { showToast } = useToast();
   
   const [isSignUp, setIsSignUp] = useState(false);
@@ -24,6 +27,9 @@ export const CustomerAuthPage: React.FC = () => {
   const [dynamicData, setDynamicData] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   useEffect(() => {
     supabase.from('form_definitions').select('*').eq('type', 'customer_profile').single().then(({ data }) => { if (data) setFormDef(data); });
@@ -38,13 +44,13 @@ export const CustomerAuthPage: React.FC = () => {
     setError(null);
     try {
       if (isSignUp) {
-        await register(email, password, fullName, JSON.stringify({ ...dynamicData, phone }));
+        await register(email, password, fullName, { ...dynamicData, phone });
         showToast('註冊成功！歡迎加入');
       } else {
         await login(email, password);
         showToast('歡迎回來');
       }
-      navigate('/booking');
+      navigate(from);
     } catch (err: any) {
       setError(err.message || '操作失敗');
     } finally {
@@ -77,6 +83,7 @@ export const CustomerAuthPage: React.FC = () => {
           <div>
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">密碼</label>
             <div className="relative"><input type="password" required className="input-field pl-12 py-4 rounded-2xl bg-slate-50 border-none focus:bg-white transition-all shadow-inner" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="您的密碼" /><Lock size={20} className="absolute left-4 top-4 text-slate-300" /></div>
+            {!isSignUp && <button type="button" onClick={() => setShowForgot(true)} className="mt-2 text-xs text-slate-400 hover:text-blue-600 font-bold">忘記密碼？</button>}
           </div>
 
           {isSignUp && (
@@ -114,6 +121,38 @@ export const CustomerAuthPage: React.FC = () => {
           <button onClick={() => { setIsSignUp(!isSignUp); setError(null); }} className="text-blue-600 hover:text-blue-800 font-bold text-sm transition-colors">{isSignUp ? '已有帳號？ 返回登入' : '還沒有帳號？ 點此註冊'}</button>
         </div>
       </div>
+
+      {/* 忘記密碼 Modal */}
+      {showForgot && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4" onClick={() => setShowForgot(false)}>
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-black text-slate-800">忘記密碼</h3><button onClick={() => setShowForgot(false)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full"><X size={20} /></button></div>
+            <p className="text-slate-500 text-sm mb-4">輸入您註冊時使用的 Email，我們將寄送重設密碼連結至您的信箱。</p>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!forgotEmail.trim()) return;
+              setForgotLoading(true);
+              try {
+                const { data: rpcData, error: rpcErr } = await supabase.rpc('request_password_reset', { p_email: forgotEmail.trim() });
+                if (rpcErr) throw rpcErr;
+                if (!rpcData?.success) throw new Error(rpcData?.message || '申請失敗');
+                const { ok: notifyOk, error: notifyError } = await callNotify({ type: 'password_reset', target_email: forgotEmail.trim(), site_url: window.location.origin });
+                if (!notifyOk) throw new Error(notifyError || '寄送失敗');
+                showToast('重設連結已寄至您的信箱');
+                setShowForgot(false);
+                setForgotEmail('');
+              } catch (err: any) {
+                showToast(err?.message || '操作失敗', 'error');
+              } finally {
+                setForgotLoading(false);
+              }
+            }} className="space-y-4">
+              <input type="email" required className="input-field w-full py-4 rounded-2xl bg-slate-50 border-none" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} placeholder="您的 Email" />
+              <button type="submit" disabled={forgotLoading} className="w-full btn-primary py-4 rounded-2xl font-black">{forgotLoading ? '處理中...' : '寄送重設連結'}</button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* 條款 Modal */}
       {showTermsModal && (

@@ -31,5 +31,5 @@ export const LandingPage: React.FC = () => {
     );
   }
 
-  return <LandingTemplate content={content} isEditing={false} />;
+  return <LandingTemplate content={content} isEditing={false} onUpdate={() => {}} />;
 };
